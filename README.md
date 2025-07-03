@@ -90,9 +90,10 @@ Apri [http://localhost:5173](http://localhost:5173) nel browser.
 ## 📚 Documentazione & Wiki
 
 - [Wiki BlockRock](https://github.com/BlockRockAdmin/BlockRock/wiki)
-- [Roadmap & Project](https://github.com/BlockRockAdmin/BlockRock/projects)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [LICENSE.md](LICENSE.md)
+- [Architettura Tecnica](https://github.com/BlockRockAdmin/BlockRock/wiki/Architettura-Tecnica-%F0%9F%9B%A0%EF%B8%8F)
+- [Roadmap](https://github.com/BlockRockAdmin/BlockRock/wiki#-roadmap)
+- [Come contribuire](https://github.com/BlockRockAdmin/BlockRock/wiki/Come-contribuire-%E2%9A%A1)
+- [Contatti & Community](https://github.com/BlockRockAdmin/BlockRock/wiki/Contatti-&-Community-%F0%9F%93%AC)
 
 ---
 
