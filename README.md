@@ -122,9 +122,11 @@ BlockRock è guidato dalla community e **i contributi sono benvenuti**!
 ## 📬 Contatti & Community
 
 - [Wiki](https://github.com/BlockRockAdmin/BlockRock/wiki)
+- [Architettura Tecnica](https://github.com/BlockRockAdmin/BlockRock/wiki/Architettura-Tecnica-%F0%9F%9B%A0%EF%B8%8F)
 - [GitHub Issues](https://github.com/BlockRockAdmin/BlockRock/issues)
 - [GitHub Sponsors](https://github.com/sponsors/BlockRockAdmin)
-- Telegram, Discord (link nella Wiki)
+- [Telegram](https://web.telegram.org/k/#@blockrock_main)
+- [Discord](https://discord.gg/Jrd2Tga5)
 
 ---
 
