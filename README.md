@@ -52,31 +52,28 @@ L’obiettivo è creare una sinergia tra blockchain, IoT, AI e narrativa RPG, pe
   Ottieni la tua API key gratuita su [TronGrid](https://www.trongrid.io/)
 
 ### Setup rapido
-
+```bash
 git clone `https://github.com/BlockRockAdmin/BlockRock.git`  
 cd `BlockRock`
-
-text
-
+```
 **Compila il core blockchain:**  
+```bash
 cd `blockrock-core`  
 cargo build
-
-text
-
+```
 **Build e lancia zion-core (orchestratore):**  
+```bash
 cd `../zion-core`  
 cargo build  
 export `TRONGRIDAPIKEY=la_tua_api_key`  # Imposta la chiave TronGrid  
 cargo run
-
-text
-
-**Avvia la dashboard Nexus:**  
+```
+**Avvia la dashboard Nexus:** 
+```bash
 cd `../nexus`  
 npm install  
 npm run dev
-
+```
 Apri [http://localhost:5173](http://localhost:5173) nel browser.
 
 ---
