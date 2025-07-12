@@ -4,22 +4,34 @@
 
 ```
 BlockRock/
-├── blockrock-core/
-│   └── src/
-│       └── ...
-├── zion-core/
-│   └── src/
-│       └── ...
-├── static/
-│   └── index.html
-├── docs/
-│   ├── img/
-│   │   └── Logo.jpg
-│   └── ...
-├── .gitignore
-├── README.md
-├── LICENSE.md
-├── CONTRIBUTING.md
+├── .github/
+│   └── workflows/        # Workflow CI/CD automatizzati (build, test, deploy)
+│       └── deploy.yml    # Esempio di workflow per il deploy automatico
+├── blockrock-core/       # Modulo blockchain: nodo P2P, consenso PoA, storage decentralizzato
+│   └── src/              # Codice sorgente Rust del nodo blockchain
+│       └── ...           # Altri file e moduli interni
+├── zion-core/            # Modulo orchestratore: API REST/gRPC, metriche, integrazione Tron
+│   └── src/              # Codice sorgente Rust dell’orchestratore
+│       └── ...           # Altri file e moduli interni
+├── static/               # File statici per dashboard web e UI (HTML, JS, CSS)
+│   └── index.html        # Home della dashboard web
+├── docs/                 # Documentazione, immagini, diagrammi e materiale di supporto
+│   ├── img/              # Immagini e loghi del progetto
+│   │   └── Logo.jpg      # Logo ufficiale BlockRock
+│   └── ...               # Altri file di documentazione
+├── iot/                  # Modulo per dispositivi e integrazione IoT
+├── lifeforge/            # Modulo app mobile (Android) e gamification
+├── ml/                   # Moduli e risorse per Machine Learning e AI
+├── nexus/                # Dashboard avanzata, UI e integrazione dati real-time
+├── .dockerignore         # File per escludere elementi dal build Docker
+├── .gitignore            # File per escludere file/cartelle dal versionamento Git
+├── README.md             # Documentazione principale del progetto
+├── LICENSE.md            # Licenza MIT del progetto
+├── CONTRIBUTING.md       # Linee guida per contribuire al progetto
+├── run_node.sh           # Script di avvio rapido per zion-core
+├── summary.sh            # Script per generare un riepilogo dello stato del progetto
+├── Cargo.lock            # Lockfile delle dipendenze Rust
+├── Cargo.toml            # Configurazione e dipendenze Rust del progetto
 ```
 
 ---
