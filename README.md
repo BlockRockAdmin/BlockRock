@@ -36,74 +36,31 @@ BlockRock/
 
 ---
 
-## 📝 Build & Setup
+## 📚 Documentazione Completa
 
-### Prerequisiti
-
-- [Rust 1.76+](https://rustup.rs/)
-- [Node.js](https://nodejs.org/) (solo per sviluppo frontend avanzato)
-- [Android NDK r26b](https://developer.android.com/ndk/downloads) (per moduli Android)
-- **Chiave TronGrid (Nile Testnet):**  
-  Ottieni la tua API key gratuita su [TronGrid](https://www.trongrid.io/)
-
-### Setup rapido
-
-`git clone https://github.com/BlockRockAdmin/BlockRock.git`  
-`cd BlockRock`
-
-Build blockrock-core (blockchain)  
-`cd blockrock-core`  
-`cargo build`
-
-Build e lancia zion-core (orchestratore)  
-`cd ../zion-core`  
-`cargo build`  
-`export TRONGRIDAPIKEY=la_tua_api_key` `# Imposta la chiave TronGrid`  
-`cargo run`
-
-text
-
-**Dashboard web:**  
-Apri [http://localhost:8000/static/index.html](http://localhost:8000/static/index.html)  
-(o sostituisci `localhost` con l’IP della tua macchina se accedi da remoto).
-
----
-
-## 🛠️ Troubleshooting
-
-- **NaN TRX nella dashboard:**  
-  Verifica che la variabile d’ambiente `TRONGRIDAPIKEY` sia impostata e che l’indirizzo TRON sia valido.
-- **Errore “static non trovato” all’avvio:**  
-  Crea la cartella `static/` dentro `zion-core` e inserisci `index.html`.
-- **Errore di build su Rocket/libp2p:**  
-  Assicurati di usare Rust 1.76+ e le versioni indicate in `Cargo.toml`.
-
----
+Tutte le istruzioni di build, setup, troubleshooting e approfondimenti tecnici sono disponibili nel [Wiki ufficiale](https://github.com/BlockRockAdmin/BlockRock/wiki).  
+Consulta il wiki per guide aggiornate, dettagli sui moduli, esempi e FAQ.
 
 ## 📚 Licenza
 
-BlockRock è rilasciato sotto licenza [MIT](https://github.com/BlockRockAdmin/BlockRock/blob/main/LICENSE.md).
-
----
+BlockRock è rilasciato sotto licenza MIT.
 
 ## 🤝 Contribuire
 
-BlockRock è guidato dalla community e **i contributi sono benvenuti** (ma preferiamo le donazioni! [💸](https://github.com/sponsors/BlockRockAdmin)).
+BlockRock è guidato dalla community e i contributi sono benvenuti (ma preferiamo le donazioni! 💸).
 
-1. Fai un fork del repository.
-2. Crea un branch descrittivo (es. `feature-miglioramenti-gps`).
-3. Committa con messaggi chiari.
-4. Apri una Pull Request.
-5. Consulta il file [CONTRIBUTING.md](https://github.com/BlockRockAdmin/BlockRock/blob/main/CONTRIBUTING.md) per dettagli.
-
----
+- Fai un fork del repository.
+- Crea un branch descrittivo.
+- Committa con messaggi chiari.
+- Apri una Pull Request.
+- Consulta il file `CONTRIBUTING.md` per dettagli.
 
 ## 📬 Contatti & Community
 
-- [Wiki](https://github.com/BlockRockAdmin/BlockRock/wiki)
-- [GitHub Issues](https://github.com/BlockRockAdmin/BlockRock/issues)
-- [GitHub Sponsors](https://github.com/sponsors/BlockRockAdmin)
+- Wiki: [https://github.com/BlockRockAdmin/BlockRock/wiki](https://github.com/BlockRockAdmin/BlockRock/wiki)
+- GitHub Issues: [https://github.com/BlockRockAdmin/BlockRock/issues](https://github.com/BlockRockAdmin/BlockRock/issues)
+- GitHub Sponsors: [https://github.com/sponsors/BlockRockAdmin](https://github.com/sponsors/BlockRockAdmin)
+
+> Tutto il necessario per usare, contribuire e scoprire BlockRock lo trovi nel Wiki ufficiale!
 
 ---
-
-> BlockRock: Forgia il tuo destino nella blockchain sostenibile!
