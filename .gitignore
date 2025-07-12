@@ -1,7 +1,10 @@
 # Ignora tutte le directory di build Rust
 /target/
 /zion-core/Cargo.lock
-
+/zion-core/target/
+/blockrock-core/target/
+/venv/
+/.env
 # Ignora file di ambiente e log
 .env
 *.log
