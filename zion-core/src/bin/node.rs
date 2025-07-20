@@ -25,8 +25,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Tron Address: {}", config.tron_address);
 
     // Inizializza blockchain
-    let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
 
+	let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
+  
     // Avvia nodo P2P
     let mut swarm = start_p2p_node(Arc::clone(&blockchain)).await?;
 

@@ -17,6 +17,7 @@ rand = "0.8"
 libp2p = { version = "0.53.0", features = ["tcp", "tokio", "mdns", "noise", "yamux", "request-response"] }
 prometheus = "0.13"
 tonic = "0.12"
+tonic-reflection = "0.12"
 prost = "0.13"
 tracing = "0.1"
 anyhow = "1.0"

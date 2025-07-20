@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-pub use crate::block::Block;
-pub use crate::transaction::Transaction;
-use ed25519_dalek::VerifyingKey;
+use super::block::Block;
+use super::transaction::Transaction;
+use ed25519_dalek::{VerifyingKey, SigningKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ impl Blockchain {
     pub fn new(authority: String) -> Self {
         let mut blockchain = Blockchain {
             blocks: Vec::new(),
-            authority,
+            authority: authority.clone(),
             balances: HashMap::new(),
             public_keys: HashMap::new(),
         };
@@ -27,12 +27,14 @@ impl Blockchain {
         blockchain.balances.insert("Node1".to_string(), 50.0);
         blockchain.balances.insert("Node2".to_string(), 0.0);
 
-        let genesis_transaction = Transaction {
-            sender: "System".to_string(),
-            receiver: "Genesis".to_string(),
-            amount: 0.0,
-            signature: None,
-        };
+        // Genera una chiave temporanea per la transazione di genesi
+        let temp_key = SigningKey::generate(&mut rand::thread_rng());
+        let genesis_transaction = Transaction::new(
+            "System".to_string(),
+            "Genesis".to_string(),
+            0.0,
+            &temp_key,
+        );
         let genesis_block = Block::new(
             0,
             vec![genesis_transaction],
@@ -79,5 +81,16 @@ impl Blockchain {
 
     pub fn add_public_key(&mut self, name: &str, key: VerifyingKey) {
         self.public_keys.insert(name.to_string(), key);
+    }
+
+    pub fn get_transaction(&self, id: &str) -> Option<Transaction> {
+        for block in &self.blocks {
+            for tx in &block.transactions {
+                if tx.id == id {
+                    return Some(tx.clone());
+                }
+            }
+        }
+        None
     }
 }

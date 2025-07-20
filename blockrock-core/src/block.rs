@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
+use hex;
 
 use crate::transaction::Transaction;
 
@@ -36,6 +37,7 @@ impl Block {
         hasher.update(self.index.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
         for tx in &self.transactions {
+            hasher.update(tx.id.as_bytes()); // Aggiunto id
             hasher.update(tx.sender.as_bytes());
             hasher.update(tx.receiver.as_bytes());
             hasher.update(tx.amount.to_le_bytes());
