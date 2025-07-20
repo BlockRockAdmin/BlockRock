@@ -1,12 +1,12 @@
 use libp2p::futures::StreamExt;
 use libp2p::mdns::Event as MdnsEvent;
 use libp2p::swarm::SwarmEvent;
-use rocket::{Rocket, Build, routes};
+use rocket::routes;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::{sync::Mutex, select};
 use zion_core::{
-    api::{prometheus::init_metrics, grpc::start_grpc, rest::{get_blocks, get_balances, tron_balance, health}},
+    api::{prometheus::init_metrics, grpc::start_grpc, rest::{get_blocks, get_balances, tron_balance, health, get_modules}},
     config::Config,
     network::p2p::{start_p2p_node, CustomEvent}
 };
@@ -20,7 +20,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Carica configurazione
-    let _config = Config::load()?; // Aggiunto _ per sopprimere il warning
+    let config = Config::load()?;
+    println!("TronGrid API Key loaded: {}", config.trongrid_api_key);
+    println!("Tron Address: {}", config.tron_address);
 
     // Inizializza blockchain
     let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
@@ -31,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Configura Rocket
     let rocket = rocket::build()
         .manage(Arc::clone(&blockchain))
-        .mount("/", routes![get_blocks, get_balances, tron_balance, health]);
+        .mount("/", routes![get_blocks, get_balances, tron_balance, health, get_modules]);
     let rocket = init_metrics(rocket);
 
     // Avvia server gRPC
