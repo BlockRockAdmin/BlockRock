@@ -42,3 +42,6 @@ android-ndk-*.zip
 
 
 
+zion-core/src/blockrock_descriptor.bin
+nexus/
+venv/

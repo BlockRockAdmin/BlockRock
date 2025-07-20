@@ -12,6 +12,7 @@ pub struct TransactionResponse {
     pub sender: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub recipient: ::prost::alloc::string::String,
+    /// Verifica che sia float
     #[prost(float, tag = "4")]
     pub amount: f32,
 }
