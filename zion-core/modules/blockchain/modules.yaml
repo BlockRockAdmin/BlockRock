@@ -1,0 +1,7 @@
+modules:
+  - name: blockchain
+    version: 0.1.0
+    description: Core blockchain module for Hyperion
+  - name: p2p
+    version: 0.53.0
+    description: P2P networking with libp2p
