@@ -6,8 +6,6 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 source "$ENV_FILE"
-echo "TRONGRIDAPIKEY=$TRONGRIDAPIKEY"
-echo "TRON_ADDRESS=$TRON_ADDRESS"
 export TRONGRIDAPIKEY
 export TRON_ADDRESS
 cd ~/Documents/BlockRock/zion-core

@@ -10,6 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 sha2 = "0.10"
+blake2 = "0.10"
 ed25519-dalek = { version = "2.0.0", features = ["rand_core", "pkcs8", "serde"] }
 rand = "0.8"
 hex = "0.4"

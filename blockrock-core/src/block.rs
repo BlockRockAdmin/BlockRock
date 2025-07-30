@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use sha2::{Sha256, Digest};
+use blake2::{Blake2b512, Digest};
 use hex;
+use serde::{Deserialize, Serialize};
 
 use crate::transaction::Transaction;
 
@@ -15,7 +15,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(index: u32, transactions: Vec<Transaction>, previous_hash: String, authority: String) -> Self {
+    pub fn new(
+        index: u32,
+        transactions: Vec<Transaction>,
+        previous_hash: String,
+        authority: String,
+    ) -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -33,7 +38,7 @@ impl Block {
     }
 
     pub fn calculate_hash(&self) -> String {
-        let mut hasher = Sha256::new();
+        let mut hasher = Blake2b512::new();
         hasher.update(self.index.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
         for tx in &self.transactions {
@@ -47,6 +52,8 @@ impl Block {
         }
         hasher.update(self.previous_hash.as_bytes());
         hasher.update(self.authority.as_bytes());
-        hex::encode(hasher.finalize())
+        let result = hasher.finalize();
+        let hash_slice = &result[..32];
+        hex::encode(hash_slice)
     }
 }
