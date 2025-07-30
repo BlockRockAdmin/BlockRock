@@ -1,11 +1,11 @@
-use rocket::{get, State};
-use rocket::serde::json::Json;
 use blockrock_core::{block::Block, blockchain::Blockchain};
+use reqwest::Client;
+use rocket::serde::json::Json;
+use rocket::{get, State};
+use serde_json::Value;
+use std::fs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::fs;
-use reqwest::Client;
-use serde_json::Value;
 
 #[get("/blocks", format = "json")]
 pub async fn get_blocks(state: &State<Arc<Mutex<Blockchain>>>) -> Json<Vec<Block>> {
@@ -21,8 +21,8 @@ pub async fn get_balances(state: &State<Arc<Mutex<Blockchain>>>) -> Json<Vec<(St
 }
 
 #[get("/tron_balance", format = "json")]
-pub async fn tron_balance() -> Json<f64> {
-    let config = crate::config::Config::load().expect("Failed to load config");
+pub async fn tron_balance() -> Result<Json<f64>, String> {
+    let config = crate::config::Config::load().map_err(|e| e)?;
     let client = Client::new();
     let response = client
         .post("https://nile.trongrid.io/wallet/getaccount")
@@ -33,11 +33,11 @@ pub async fn tron_balance() -> Json<f64> {
         }))
         .send()
         .await
-        .expect("Failed to call TronGrid");
-    
-    let data: Value = response.json().await.expect("Failed to parse JSON");
-    let balance = data["balance"].as_f64().unwrap_or(0.0) / 1_000_000.0; // Converti da Sun a TRX
-    Json(balance)
+        .map_err(|e| e.to_string())?;
+
+    let data: Value = response.json().await.map_err(|e| e.to_string())?;
+    let balance = data["balance"].as_f64().unwrap_or(0.0) / 1_000_000.0;
+    Ok(Json(balance))
 }
 
 #[get("/health")]
