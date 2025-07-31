@@ -1,16 +1,24 @@
+use blockrock_core::blockchain::Blockchain;
 use libp2p::futures::StreamExt;
 use libp2p::mdns::Event as MdnsEvent;
 use libp2p::swarm::SwarmEvent;
 use rocket::routes;
+use rocket::tokio::sync::broadcast;
 use std::error::Error;
 use std::sync::Arc;
-use tokio::{sync::Mutex, select};
+use tokio::{select, sync::Mutex};
 use zion_core::{
-    api::{prometheus::init_metrics, grpc::start_grpc, rest::{get_blocks, get_balances, tron_balance, health, get_modules}},
+    api::{
+        grpc::start_grpc,
+        prometheus::init_metrics,
+        rest::{
+            get_balances, get_blocks, get_modules, health, post_sensor, sensor_events,
+            tron_balance, SensorReading,
+        },
+    },
     config::Config,
-    network::p2p::{start_p2p_node, CustomEvent}
+    network::p2p::{start_p2p_node, CustomEvent},
 };
-use blockrock_core::blockchain::Blockchain;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -26,15 +34,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Inizializza blockchain
 
-	let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
-  
+    let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
+
+    // Canale broadcast per i sensori
+    let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(100);
+
     // Avvia nodo P2P
     let mut swarm = start_p2p_node(Arc::clone(&blockchain)).await?;
 
     // Configura Rocket
     let rocket = rocket::build()
         .manage(Arc::clone(&blockchain))
-        .mount("/", routes![get_blocks, get_balances, tron_balance, health, get_modules]);
+        .manage(sensor_tx.clone())
+        .mount(
+            "/",
+            routes![
+                get_blocks,
+                get_balances,
+                tron_balance,
+                health,
+                get_modules,
+                post_sensor,
+                sensor_events
+            ],
+        );
     let rocket = init_metrics(rocket);
 
     // Avvia server gRPC

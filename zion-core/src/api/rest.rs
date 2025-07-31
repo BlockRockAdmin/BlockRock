@@ -1,7 +1,10 @@
 use blockrock_core::{block::Block, blockchain::Blockchain};
 use reqwest::Client;
+use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
-use rocket::{get, State};
+use rocket::serde::{Deserialize, Serialize};
+use rocket::tokio::sync::broadcast::{error::RecvError, Sender};
+use rocket::{get, post, State};
 use serde_json::Value;
 use std::fs;
 use std::sync::Arc;
@@ -50,4 +53,34 @@ pub async fn get_modules() -> Json<String> {
     let yaml = fs::read_to_string("modules/blockchain/modules.yaml")
         .unwrap_or_else(|_| "Error: modules.yaml not found".to_string());
     Json(yaml)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensorReading {
+    pub sensor_id: String,
+    pub value: f64,
+}
+
+#[post("/sensors", format = "json", data = "<reading>")]
+pub async fn post_sensor(
+    reading: Json<SensorReading>,
+    tx: &State<Sender<SensorReading>>,
+) -> &'static str {
+    let _ = tx.send(reading.into_inner());
+    "OK"
+}
+
+#[get("/sensors/stream")]
+pub async fn sensor_events(tx: &State<Sender<SensorReading>>) -> EventStream![Event + '_] {
+    let mut rx = tx.subscribe();
+    EventStream! {
+        loop {
+            let msg = rx.recv().await;
+            match msg {
+                Ok(reading) => yield Event::json(&reading),
+                Err(RecvError::Closed) => break,
+                Err(RecvError::Lagged(_)) => continue,
+            }
+        }
+    }
 }
