@@ -56,4 +56,9 @@ impl Block {
         let hash_slice = &result[..32];
         hex::encode(hash_slice)
     }
+
+    /// Verifica che l'hash memorizzato nel blocco sia corretto
+    pub fn is_hash_valid(&self) -> bool {
+        self.calculate_hash() == self.hash
+    }
 }

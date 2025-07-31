@@ -15,3 +15,11 @@ Il modulo fa parte del workspace Rust del repository, quindi viene compilato aut
 ## Integrazione con il progetto
 
 `blockrock-core` è importato da `zion-core` e da altri servizi per esporre funzionalità blockchain comuni. Le librerie generate possono essere riutilizzate da applicazioni Rust esterne o da moduli aggiuntivi della piattaforma.
+
+## Funzionalità aggiuntive
+
+Oltre alle strutture di base per blocchi e transazioni, il modulo offre ora:
+
+- verifica dell'integrità della catena (`validate_chain`)
+- funzioni di persistenza per salvare e caricare la blockchain in formato JSON
+
