@@ -1,7 +1,13 @@
 use libp2p::{
-    identity, mdns::Mdns, swarm::{Swarm, SwarmBuilder, SwarmEvent}, PeerId, NetworkBehaviour,
+    identity,
+    mdns::{Mdns, MdnsConfig},
+    swarm::{Swarm, SwarmBuilder, SwarmEvent},
+    PeerId, NetworkBehaviour,
 };
 use std::error::Error;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use libp2p_swarm as libp2p_swarm;
 use tracing::info;
 use zion_core::blockchain::Blockchain;
 
@@ -22,15 +28,15 @@ pub enum ZionBehaviourEvent {
 pub struct BlockchainSyncBehaviour;
 
 impl NetworkBehaviour for BlockchainSyncBehaviour {
-    type ProtocolsHandler = /* Definisci handler */;
+    type ProtocolsHandler = libp2p_swarm::dummy::ConnectionHandler;
     type OutEvent = ZionBehaviourEvent;
 
     fn new_handler(&mut self) -> Self::ProtocolsHandler {
-        // Implementa handler per sincronizzazione
+        libp2p_swarm::dummy::ConnectionHandler
     }
 
     fn inject_event(&mut self, peer: PeerId, data: Vec<u8>) {
-        // Gestisci dati blockchain
+        tracing::info!("Received blockchain sync from {}: {} bytes", peer, data.len());
     }
 }
 
