@@ -1,26 +1,3 @@
-<<<<<<< HEAD
-import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vueDevTools from 'vite-plugin-vue-devtools'
-
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevTools(),
-  ],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
-  },
-  server: {
-    host: '0.0.0.0', // <--- AGGIUNGI QUESTO
-    port: 5173        // <--- (opzionale, default 5173)
-  }
-})
-=======
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
@@ -51,8 +28,8 @@ export default defineConfig({
   define: {
     'process.env': {},
     global: 'window',
-    'buffer': ['buffer', 'buffer'],
-    'Buffer': ['buffer', 'Buffer'],
+    buffer: ['buffer', 'buffer'],
+    Buffer: ['buffer', 'Buffer'],
   },
   server: {
     host: '0.0.0.0',
@@ -66,12 +43,6 @@ export default defineConfig({
       'Cache-Control': 'public, max-age=0',
       'X-Content-Type-Options': 'nosniff',
     },
-
-mimeTypes: {
-    'js': 'application/javascript',
-    'mjs': 'application/javascript',
   },
-  },
-base: '/', // Aggiunto per coerenza
+  base: '/', // Aggiunto per coerenza
 });
->>>>>>> feature/nexus-integration
