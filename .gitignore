@@ -1,47 +1,34 @@
-# Ignora tutte le directory di build Rust
+# Artifacts di build
 /target/
-/zion-core/Cargo.lock
 /zion-core/target/
 /blockrock-core/target/
+output-directory
+
+# File binari generati
+zion-core/src/blockrock_descriptor.bin
+
+# File Cargo non versionati
+/zion-core/Cargo.lock
+# (Non ignorare Cargo.toml o Cargo.lock!)
+
+# Ambienti virtuali Python
+venv/
 /venv/
-/.env
-# Ignora file di ambiente e log
+
+# File di configurazione e log
 .env
+/.env
 *.log
 nohup.out
 *.tmp
-output-directory
 
-# Ignora file temporanei di editor
+# File temporanei di editor
 *~
 *.swp
 *.swo
 
-# Ignora file di build Android (se usati)
+# File di build Android (se usati)
 android-ndk-*.zip
 
-# (Non ignorare Cargo.toml o Cargo.lock!)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-zion-core/src/blockrock_descriptor.bin
+# Moduli esterni non necessari
 nexus/
-venv/
