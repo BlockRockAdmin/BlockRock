@@ -2,7 +2,10 @@ use super::block::Block;
 use super::transaction::Transaction;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Blockchain {
@@ -109,5 +112,46 @@ impl Blockchain {
             }
         }
         None
+    }
+
+    /// Verifica l'intera catena controllando hash e firme
+    pub fn validate_chain(&self) -> bool {
+        for i in 1..self.blocks.len() {
+            let current = &self.blocks[i];
+            let previous = &self.blocks[i - 1];
+            if current.previous_hash != previous.hash {
+                return false;
+            }
+            if !current.is_hash_valid() {
+                return false;
+            }
+            for tx in &current.transactions {
+                if tx.sender != "System" {
+                    let key = match self.public_keys.get(&tx.sender) {
+                        Some(k) => k,
+                        None => return false,
+                    };
+                    if !tx.verify(key) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Salva la blockchain in formato JSON
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        let data = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        fs::write(path, data)
+    }
+
+    /// Carica una blockchain da file JSON
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        let data = fs::read_to_string(path)?;
+        let chain: Blockchain = serde_json::from_str(&data)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(chain)
     }
 }
