@@ -25,6 +25,9 @@ async fn test_multi_node_discovery() {
             if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) = event {
                 assert!(!peers.is_empty(), "Node1 dovrebbe scoprire peer");
                 break;
+            } else if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Expired(_))) = event {
+                // Ignora eventi Expired per il test
+                continue;
             }
         }
     });
@@ -34,6 +37,9 @@ async fn test_multi_node_discovery() {
             if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) = event {
                 assert!(!peers.is_empty(), "Node2 dovrebbe scoprire peer");
                 break;
+            } else if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Expired(_))) = event {
+                // Ignora eventi Expired per il test
+                continue;
             }
         }
     });
