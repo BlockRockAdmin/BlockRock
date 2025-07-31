@@ -1,5 +1,4 @@
 import { ref } from 'vue';
-import { TronWeb } from 'tronweb';
 import { useAvatarStore } from '@/store';
 
 export function useTron() {

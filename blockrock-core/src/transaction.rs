@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier, Signature};
-use sha2::{Sha256, Digest};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -65,6 +65,10 @@ impl Transaction {
 
 impl fmt::Display for Transaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Transaction: {} -> {} ({}, id: {})", self.sender, self.receiver, self.amount, self.id)
+        write!(
+            f,
+            "Transaction: {} -> {} ({}, id: {})",
+            self.sender, self.receiver, self.amount, self.id
+        )
     }
 }

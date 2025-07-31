@@ -15,7 +15,7 @@ Il progetto si ispira a dashboard moderne come Grafana e al mondo della blockcha
 - **Requisiti**: Node.js (v14+), npm, TronLink (estensione Chrome/Firefox).
 - **Passaggi**:
   1. Clona il repository: `git clone https://github.com/BlockRockAdmin/BlockRock.git`.
-  2. Entra nella directory: `cd blockrock-nexus`.
+  2. Entra nella directory: `cd nexus`.
   3. Installa le dipendenze: `npm install`.
   4. Avvia in modalità sviluppo: `npm run dev`.
   5. Accedi da browser: `http://localhost:5173` o `http://<IP-LAN>:5173`.

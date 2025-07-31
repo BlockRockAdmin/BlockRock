@@ -1,7 +1,8 @@
-use futures::StreamExt;
-use libp2p::swarm::SwarmEvent;
-use zion_core::network::{start_p2p_node, MyBehaviourEvent};
+use zion_core::network::p2p::{start_p2p_node, CustomEvent};
 use blockrock_core::blockchain::Blockchain;
+use libp2p::futures::StreamExt;
+use libp2p::swarm::SwarmEvent;
+use libp2p::mdns::Event as MdnsEvent;
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -21,26 +22,24 @@ async fn test_multi_node_discovery() {
 
     let node1_handle = tokio::spawn(async move {
         while let Some(event) = node1.next().await {
-            if let SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(event)) = event {
-                let peers = match event {
-                    libp2p::mdns::Event::Discovered(peers) => peers,
-                    libp2p::mdns::Event::Expired(peers) => peers,
-                };
+            if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) = event {
                 assert!(!peers.is_empty(), "Node1 dovrebbe scoprire peer");
                 break;
+            } else if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Expired(_))) = event {
+                // Ignora eventi Expired per il test
+                continue;
             }
         }
     });
 
     let node2_handle = tokio::spawn(async move {
         while let Some(event) = node2.next().await {
-            if let SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(event)) = event {
-                let peers = match event {
-                    libp2p::mdns::Event::Discovered(peers) => peers,
-                    libp2p::mdns::Event::Expired(peers) => peers,
-                };
+            if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) = event {
                 assert!(!peers.is_empty(), "Node2 dovrebbe scoprire peer");
                 break;
+            } else if let SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Expired(_))) = event {
+                // Ignora eventi Expired per il test
+                continue;
             }
         }
     });

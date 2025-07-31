@@ -1,8 +1,11 @@
-use std::collections::HashMap;
 use super::block::Block;
 use super::transaction::Transaction;
-use ed25519_dalek::{VerifyingKey, SigningKey};
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use serde_json;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Blockchain {
@@ -29,12 +32,8 @@ impl Blockchain {
 
         // Genera una chiave temporanea per la transazione di genesi
         let temp_key = SigningKey::generate(&mut rand::thread_rng());
-        let genesis_transaction = Transaction::new(
-            "System".to_string(),
-            "Genesis".to_string(),
-            0.0,
-            &temp_key,
-        );
+        let genesis_transaction =
+            Transaction::new("System".to_string(), "Genesis".to_string(), 0.0, &temp_key);
         let genesis_block = Block::new(
             0,
             vec![genesis_transaction],
@@ -46,25 +45,45 @@ impl Blockchain {
     }
 
     pub fn add_block(&mut self, transactions: Vec<Transaction>, authority: String) -> bool {
-        let previous_hash = self.blocks.last().map(|block| block.hash.clone()).unwrap_or("0".to_string());
+        let previous_hash = self
+            .blocks
+            .last()
+            .map(|block| block.hash.clone())
+            .unwrap_or_else(|| "0".to_string());
+
+        // Validate transactions before applying them
+        for tx in &transactions {
+            if tx.sender != "System" {
+                let key = match self.public_keys.get(&tx.sender) {
+                    Some(k) => k,
+                    None => return false,
+                };
+                if !tx.verify(key) {
+                    return false;
+                }
+                match self.balances.get(&tx.sender) {
+                    Some(balance) if *balance >= tx.amount => {}
+                    _ => return false,
+                }
+            }
+        }
+
         let new_block = Block::new(
             self.blocks.len() as u32,
             transactions.clone(),
             previous_hash,
             authority,
         );
-        for transaction in &transactions {
-            if transaction.sender != "System" {
-                if let Some(sender_balance) = self.balances.get_mut(&transaction.sender) {
-                    *sender_balance -= transaction.amount;
+
+        for tx in &transactions {
+            if tx.sender != "System" {
+                if let Some(balance) = self.balances.get_mut(&tx.sender) {
+                    *balance -= tx.amount;
                 }
             }
-            if let Some(receiver_balance) = self.balances.get_mut(&transaction.receiver) {
-                *receiver_balance += transaction.amount;
-            } else {
-                self.balances.insert(transaction.receiver.clone(), transaction.amount);
-            }
+            *self.balances.entry(tx.receiver.clone()).or_insert(0.0) += tx.amount;
         }
+
         self.blocks.push(new_block);
         true
     }
@@ -74,7 +93,8 @@ impl Blockchain {
     }
 
     pub fn get_balances(&self) -> Vec<(String, f64)> {
-        let mut balances: Vec<(String, f64)> = self.balances.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut balances: Vec<(String, f64)> =
+            self.balances.iter().map(|(k, v)| (k.clone(), *v)).collect();
         balances.sort_by(|a, b| a.0.cmp(&b.0));
         balances
     }
@@ -92,5 +112,46 @@ impl Blockchain {
             }
         }
         None
+    }
+
+    /// Verifica l'intera catena controllando hash e firme
+    pub fn validate_chain(&self) -> bool {
+        for i in 1..self.blocks.len() {
+            let current = &self.blocks[i];
+            let previous = &self.blocks[i - 1];
+            if current.previous_hash != previous.hash {
+                return false;
+            }
+            if !current.is_hash_valid() {
+                return false;
+            }
+            for tx in &current.transactions {
+                if tx.sender != "System" {
+                    let key = match self.public_keys.get(&tx.sender) {
+                        Some(k) => k,
+                        None => return false,
+                    };
+                    if !tx.verify(key) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// Salva la blockchain in formato JSON
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        let data = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        fs::write(path, data)
+    }
+
+    /// Carica una blockchain da file JSON
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        let data = fs::read_to_string(path)?;
+        let chain: Blockchain = serde_json::from_str(&data)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(chain)
     }
 }
