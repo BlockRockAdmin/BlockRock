@@ -10,7 +10,6 @@ rocket = { version = "0.5.1", features = ["json"] }
 tokio = { version = "1.40", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0"
-serde_cbor = "0.11"
 reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core", "pkcs8", "serde"] }
 rand = "0.8"
@@ -22,8 +21,6 @@ prost = "0.13"
 tracing = "0.1"
 anyhow = "1.0"
 dotenvy = "0.15"
-rocksdb = "0.22"
-base64ct = "1.7.0"
 libp2p-swarm-derive = "0.34.1"
 
 [dev-dependencies]
