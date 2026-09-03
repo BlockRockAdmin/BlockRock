@@ -11,8 +11,10 @@ fn save_and_load_chain() {
     chain.add_public_key("Alice", key.verifying_key());
 
     let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 5.0, &key);
+    let transaction_id = tx.id.clone();
     assert!(chain.add_block(vec![tx], "Node1".to_string()));
     assert!(chain.validate_chain());
+    assert_eq!(chain.get_transaction(&transaction_id).unwrap().id, transaction_id);
 
     let dir = tempdir().unwrap();
     let path = dir.path().join("chain.json");
@@ -21,4 +23,5 @@ fn save_and_load_chain() {
     let loaded = Blockchain::load_from_file(&path).unwrap();
     assert!(loaded.validate_chain());
     assert_eq!(loaded.blocks.len(), chain.blocks.len());
+    assert_eq!(loaded.get_transaction(&transaction_id).unwrap().id, transaction_id);
 }

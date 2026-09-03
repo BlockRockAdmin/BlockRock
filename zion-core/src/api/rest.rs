@@ -12,6 +12,24 @@ use tokio::sync::Mutex;
 
 use crate::monitoring::{MetabolicStatus, SharedMetabolicStatus};
 
+/// Reusable connection pool and immutable Tron configuration.
+/// Constructing this once avoids DNS/TLS setup and environment parsing per request.
+pub struct TronService {
+    client: Client,
+    api_key: String,
+    address: String,
+}
+
+impl TronService {
+    pub fn new(api_key: String, address: String) -> Self {
+        Self {
+            client: Client::new(),
+            api_key,
+            address,
+        }
+    }
+}
+
 #[get("/blocks", format = "json")]
 pub async fn get_blocks(state: &State<Arc<Mutex<Blockchain>>>) -> Json<Vec<Block>> {
     let blockchain = state.lock().await;
@@ -26,14 +44,13 @@ pub async fn get_balances(state: &State<Arc<Mutex<Blockchain>>>) -> Json<Vec<(St
 }
 
 #[get("/tron_balance", format = "json")]
-pub async fn tron_balance() -> Result<Json<f64>, String> {
-    let config = crate::config::Config::load().map_err(|e| e)?;
-    let client = Client::new();
-    let response = client
+pub async fn tron_balance(service: &State<TronService>) -> Result<Json<f64>, String> {
+    let response = service
+        .client
         .post("https://nile.trongrid.io/wallet/getaccount")
-        .header("TRON-PRO-API-KEY", &config.trongrid_api_key)
+        .header("TRON-PRO-API-KEY", &service.api_key)
         .json(&serde_json::json!({
-            "address": config.tron_address,
+            "address": service.address,
             "visible": true
         }))
         .send()

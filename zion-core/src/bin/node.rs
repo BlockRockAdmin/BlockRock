@@ -14,7 +14,7 @@ use zion_core::{
         prometheus::init_metrics,
         rest::{
             get_balances, get_blocks, get_modules, health, post_sensor, sensor_events,
-            metabolism_status, tron_balance, SensorReading,
+            metabolism_status, tron_balance, SensorReading, TronService,
         },
     },
     config::Config,
@@ -31,7 +31,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Carica configurazione
     let config = Config::load()?;
-    println!("TronGrid API Key loaded: {}", config.trongrid_api_key);
     println!("Tron Address: {}", config.tron_address);
 
     // Inizializza blockchain
@@ -40,6 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Canale broadcast per i sensori
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(100);
+    let tron_service = TronService::new(config.trongrid_api_key, config.tron_address);
 
     // Il loop decide soltanto: nessun provider cloud o Docker viene azionato.
     let metabolic_status = shared_metabolic_status();
@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .manage(Arc::clone(&blockchain))
         .manage(sensor_tx.clone())
         .manage(metabolic_status)
+        .manage(tron_service)
         .mount(
             "/",
             routes![

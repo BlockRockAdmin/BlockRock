@@ -13,6 +13,9 @@ pub struct Blockchain {
     pub authority: String,
     pub balances: HashMap<String, f64>,
     pub public_keys: HashMap<String, VerifyingKey>,
+    /// Runtime-only index: transaction queries must not scan the entire chain.
+    #[serde(skip)]
+    transaction_index: HashMap<String, (usize, usize)>,
 }
 
 impl Blockchain {
@@ -22,6 +25,7 @@ impl Blockchain {
             authority: authority.clone(),
             balances: HashMap::new(),
             public_keys: HashMap::new(),
+            transaction_index: HashMap::new(),
         };
         blockchain.balances.insert("System".to_string(), 1000.0);
         blockchain.balances.insert("Alice".to_string(), 100.0);
@@ -41,6 +45,7 @@ impl Blockchain {
             blockchain.authority.clone(),
         );
         blockchain.blocks.push(genesis_block);
+        blockchain.rebuild_transaction_index();
         blockchain
     }
 
@@ -70,12 +75,12 @@ impl Blockchain {
 
         let new_block = Block::new(
             self.blocks.len() as u32,
-            transactions.clone(),
+            transactions,
             previous_hash,
             authority,
         );
 
-        for tx in &transactions {
+        for tx in &new_block.transactions {
             if tx.sender != "System" {
                 if let Some(balance) = self.balances.get_mut(&tx.sender) {
                     *balance -= tx.amount;
@@ -84,7 +89,12 @@ impl Blockchain {
             *self.balances.entry(tx.receiver.clone()).or_insert(0.0) += tx.amount;
         }
 
+        let block_index = self.blocks.len();
         self.blocks.push(new_block);
+        for (transaction_index, transaction) in self.blocks[block_index].transactions.iter().enumerate() {
+            self.transaction_index
+                .insert(transaction.id.clone(), (block_index, transaction_index));
+        }
         true
     }
 
@@ -104,14 +114,12 @@ impl Blockchain {
     }
 
     pub fn get_transaction(&self, id: &str) -> Option<Transaction> {
-        for block in &self.blocks {
-            for tx in &block.transactions {
-                if tx.id == id {
-                    return Some(tx.clone());
-                }
-            }
-        }
-        None
+        let (block_index, transaction_index) = self.transaction_index.get(id)?;
+        self.blocks
+            .get(*block_index)?
+            .transactions
+            .get(*transaction_index)
+            .cloned()
     }
 
     /// Verifica l'intera catena controllando hash e firme
@@ -150,8 +158,19 @@ impl Blockchain {
     /// Carica una blockchain da file JSON
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let data = fs::read_to_string(path)?;
-        let chain: Blockchain = serde_json::from_str(&data)
+        let mut chain: Blockchain = serde_json::from_str(&data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        chain.rebuild_transaction_index();
         Ok(chain)
+    }
+
+    fn rebuild_transaction_index(&mut self) {
+        self.transaction_index.clear();
+        for (block_index, block) in self.blocks.iter().enumerate() {
+            for (transaction_index, transaction) in block.transactions.iter().enumerate() {
+                self.transaction_index
+                    .insert(transaction.id.clone(), (block_index, transaction_index));
+            }
+        }
     }
 }
