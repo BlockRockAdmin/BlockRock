@@ -8,7 +8,8 @@ use tokio::sync::Mutex;
 use crate::api::prometheus::init_metrics;
 use crate::api::rest::{
     get_account, get_balances, get_blocks, get_modules, health, metabolism_status, post_sensor,
-    register_account, sensor_events, submit_transaction, tron_balance, SensorReading, TronService,
+    register_account, sensor_events, submit_transaction, tron_balance, BlockAnnouncer,
+    SensorReading, TronService,
 };
 use crate::identity::NodeIdentity;
 use crate::monitoring::SharedMetabolicStatus;
@@ -24,6 +25,8 @@ pub struct ServerContext {
     pub sensor_tx: Sender<SensorReading>,
     pub metabolic_status: SharedMetabolicStatus,
     pub tron_service: TronService,
+    /// Where sealed blocks are handed over for propagation to the peers.
+    pub block_announcer: BlockAnnouncer,
 }
 
 pub fn build(context: ServerContext) -> Rocket<Build> {
@@ -34,6 +37,7 @@ pub fn build(context: ServerContext) -> Rocket<Build> {
         .manage(context.tron_service)
         .manage(context.identity)
         .manage(context.store)
+        .manage(context.block_announcer)
         .mount(
             "/",
             routes![

@@ -8,16 +8,19 @@ use rocket::tokio::sync::broadcast;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use zion_core::api::rest::{SensorReading, TronService};
 use zion_core::identity::NodeIdentity;
 use zion_core::monitoring::shared_metabolic_status;
+use zion_core::network::sync::BlockAnnouncement;
 use zion_core::server::{self, ServerContext};
 use zion_core::storage::ChainStore;
 
 struct TestNode {
     client: Client,
     store: ChainStore,
+    /// What the node would push to its peers.
+    announcements: mpsc::Receiver<BlockAnnouncement>,
     _dir: TempDir,
 }
 
@@ -33,6 +36,7 @@ async fn start_node() -> TestNode {
     store.save(&chain).unwrap();
 
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(8);
+    let (block_announcer, announcements) = mpsc::channel::<BlockAnnouncement>(8);
     let rocket = server::build(ServerContext {
         blockchain: Arc::new(Mutex::new(chain)),
         identity,
@@ -40,11 +44,13 @@ async fn start_node() -> TestNode {
         sensor_tx,
         metabolic_status: shared_metabolic_status(),
         tron_service: TronService::new("test-key".to_string(), "test-address".to_string()),
+        block_announcer,
     });
 
     TestNode {
         client: Client::tracked(rocket).await.unwrap(),
         store,
+        announcements,
         _dir: dir,
     }
 }
@@ -85,7 +91,7 @@ async fn submit(client: &Client, body: Value) -> (Status, Value) {
 
 #[rocket::async_test]
 async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
-    let node = start_node().await;
+    let mut node = start_node().await;
     let alice = SigningKey::generate(&mut OsRng);
     assert_eq!(register(&node.client, "Alice", &alice).await, Status::Ok);
 
@@ -131,6 +137,11 @@ async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     let balances = balances.as_array().unwrap();
     assert!(balances.contains(&json!(["Alice", 70])));
     assert!(balances.contains(&json!(["Bob", 80])));
+
+    // The sealed block is handed to the P2P loop for the peers.
+    let announced = node.announcements.try_recv().expect("the block is announced");
+    assert_eq!(announced.block.index, 1);
+    assert!(announced.accounts.contains_key("Alice"));
 
     // The chain was written through: a restart resumes from the same tip.
     let reloaded = Blockchain::load_from_file(node.store.path()).unwrap();

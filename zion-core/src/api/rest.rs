@@ -15,11 +15,17 @@ use serde_json::Value;
 use std::fmt;
 use std::fs;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::identity::NodeIdentity;
 use crate::monitoring::{MetabolicStatus, SharedMetabolicStatus};
+use crate::network::sync::{announcement_of, BlockAnnouncement};
 use crate::storage::ChainStore;
+
+/// Blocks sealed by this node are handed to the P2P loop, which pushes them to
+/// every connected peer. Announcing is best effort: a full or closed channel
+/// never fails a transaction that is already on chain.
+pub type BlockAnnouncer = mpsc::Sender<BlockAnnouncement>;
 
 /// Reusable connection pool and immutable Tron configuration.
 /// Constructing this once avoids DNS/TLS setup and environment parsing per request.
@@ -92,7 +98,7 @@ pub struct TransactionAccepted {
 }
 
 /// Accepts a signed transfer, seals it into a block with this node's authority
-/// key and persists the chain before answering.
+/// key, persists the chain and announces the block to the peers.
 ///
 /// One transaction per block: a mempool that batches pending transfers is the
 /// natural next step, not a change of contract.
@@ -102,6 +108,7 @@ pub async fn submit_transaction(
     state: &State<Arc<Mutex<Blockchain>>>,
     identity: &State<NodeIdentity>,
     store: &State<ChainStore>,
+    announcer: &State<BlockAnnouncer>,
 ) -> Result<Json<TransactionAccepted>, ApiFailure> {
     let submission = submission.into_inner();
     if submission.sender == MINT_ACCOUNT {
@@ -132,6 +139,12 @@ pub async fn submit_transaction(
             format!("block {} accepted but not persisted: {}", block_index, error),
         )
     })?;
+
+    if let Some(block) = blockchain.blocks.last() {
+        let announcement = announcement_of(&blockchain, block.clone());
+        drop(blockchain);
+        let _ = announcer.try_send(announcement);
+    }
 
     Ok(Json(TransactionAccepted { id, block_index }))
 }

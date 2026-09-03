@@ -13,7 +13,7 @@ serde_json = "1.0"
 reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core", "pkcs8", "serde"] }
 rand = "0.8"
-libp2p = { version = "0.53.0", features = ["tcp", "tokio", "mdns", "noise", "yamux", "request-response"] }
+libp2p = { version = "0.53.0", features = ["tcp", "tokio", "mdns", "noise", "yamux", "request-response", "json"] }
 prometheus = "0.13"
 tonic = "0.12"
 tonic-reflection = "0.12"
