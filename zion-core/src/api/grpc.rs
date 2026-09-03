@@ -10,7 +10,7 @@ pub mod blockrock {
     tonic::include_proto!("blockrock");
 }
 
-const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("../blockrock_descriptor.bin");
+const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blockrock_descriptor.bin"));
 
 #[derive(Clone)]
 pub struct MyTransactionService {

@@ -10,6 +10,8 @@ use std::fs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::monitoring::{MetabolicStatus, SharedMetabolicStatus};
+
 #[get("/blocks", format = "json")]
 pub async fn get_blocks(state: &State<Arc<Mutex<Blockchain>>>) -> Json<Vec<Block>> {
     let blockchain = state.lock().await;
@@ -46,6 +48,13 @@ pub async fn tron_balance() -> Result<Json<f64>, String> {
 #[get("/health")]
 pub async fn health() -> &'static str {
     "OK"
+}
+
+/// Latest policy decision from the autonomous monitoring loop.
+/// This endpoint is informational: it never performs infrastructure changes.
+#[get("/metabolism", format = "json")]
+pub async fn metabolism_status(state: &State<SharedMetabolicStatus>) -> Json<MetabolicStatus> {
+    Json(state.read().await.clone())
 }
 
 #[get("/modules", format = "json")]

@@ -6,6 +6,7 @@ use rocket::routes;
 use rocket::tokio::sync::broadcast;
 use std::error::Error;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::{select, sync::Mutex};
 use zion_core::{
     api::{
@@ -13,10 +14,11 @@ use zion_core::{
         prometheus::init_metrics,
         rest::{
             get_balances, get_blocks, get_modules, health, post_sensor, sensor_events,
-            tron_balance, SensorReading,
+            metabolism_status, tron_balance, SensorReading,
         },
     },
     config::Config,
+    monitoring::{run_monitoring_loop, shared_metabolic_status, Hypothalamus, ProcfsVitalsSource},
     network::p2p::{start_p2p_node, CustomEvent},
 };
 
@@ -39,6 +41,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Canale broadcast per i sensori
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(100);
 
+    // Il loop decide soltanto: nessun provider cloud o Docker viene azionato.
+    let metabolic_status = shared_metabolic_status();
+    let metabolic_handle = tokio::spawn(run_monitoring_loop(
+        ProcfsVitalsSource::default(),
+        Hypothalamus::default(),
+        Arc::clone(&metabolic_status),
+        Duration::from_secs(15),
+    ));
+
     // Avvia nodo P2P
     let mut swarm = start_p2p_node(Arc::clone(&blockchain)).await?;
 
@@ -46,6 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let rocket = rocket::build()
         .manage(Arc::clone(&blockchain))
         .manage(sensor_tx.clone())
+        .manage(metabolic_status)
         .mount(
             "/",
             routes![
@@ -53,6 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 get_balances,
                 tron_balance,
                 health,
+                metabolism_status,
                 get_modules,
                 post_sensor,
                 sensor_events
@@ -103,5 +116,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    metabolic_handle.abort();
     Ok(())
 }

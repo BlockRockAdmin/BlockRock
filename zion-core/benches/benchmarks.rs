@@ -1,16 +1,14 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use zion_core::network::p2p::MyBehaviour;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use zion_core::monitoring::{Hypothalamus, SystemVitals};
 
-fn bench_my_behaviour(c: &mut Criterion) {
-    c.bench_function("my_behaviour_poll", |b| {
+fn bench_hypothalamus_evaluation(c: &mut Criterion) {
+    c.bench_function("hypothalamus_evaluation", |b| {
         b.iter(|| {
-            let mut behaviour = MyBehaviour::default();
-            let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-            let mut params = libp2p::swarm::dummy::PollParameters::new();
-            let _ = behaviour.poll(&mut cx, &mut params);
+            let mut hypothalamus = Hypothalamus::default();
+            hypothalamus.evaluate(black_box(SystemVitals::new(86.0, 92.0, 120.0, 0.2)));
         })
     });
 }
 
-criterion_group!(benches, bench_my_behaviour);
+criterion_group!(benches, bench_hypothalamus_evaluation);
 criterion_main!(benches);

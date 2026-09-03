@@ -2,6 +2,7 @@
 pub mod api;
 pub mod network;
 pub mod config;
+pub mod monitoring;
 
 // Esportazioni dei moduli API (se esistono e contengono le funzioni indicate)
 pub use api::rest; // Modulo rest.rs con funzioni HTTP
