@@ -2,25 +2,34 @@ use blockrock_core::blockchain::Blockchain;
 use libp2p::futures::StreamExt;
 use libp2p::mdns::Event as MdnsEvent;
 use libp2p::swarm::SwarmEvent;
-use rocket::routes;
+use libp2p::PeerId;
 use rocket::tokio::sync::broadcast;
+use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::{select, sync::Mutex};
+use tokio::{select, sync::mpsc, sync::Mutex};
+use tracing::info;
 use zion_core::{
     api::{
         grpc::start_grpc,
-        prometheus::init_metrics,
-        rest::{
-            get_balances, get_blocks, get_modules, health, post_sensor, sensor_events,
-            metabolism_status, tron_balance, SensorReading,
-        },
+        rest::{SensorReading, TronService},
     },
     config::Config,
+    identity::NodeIdentity,
     monitoring::{run_monitoring_loop, shared_metabolic_status, Hypothalamus, ProcfsVitalsSource},
-    network::p2p::{start_p2p_node, CustomEvent},
+    network::{
+        p2p::{start_p2p_node, CustomEvent},
+        service::handle_sync_event,
+        sync::{BlockAnnouncement, SyncRequest},
+    },
+    server::{self, ServerContext},
+    storage::ChainStore,
 };
+
+/// Blocks waiting to be pushed to the peers. Sealing is much faster than
+/// broadcasting, so the queue absorbs bursts.
+const ANNOUNCEMENT_QUEUE: usize = 64;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -31,15 +40,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Carica configurazione
     let config = Config::load()?;
-    println!("TronGrid API Key loaded: {}", config.trongrid_api_key);
     println!("Tron Address: {}", config.tron_address);
 
-    // Inizializza blockchain
+    // Identità dell'autorità: la chiave con cui questo nodo sigilla i blocchi
+    let identity =
+        NodeIdentity::load_or_create(config.authority_name.clone(), &config.authority_key_path)?;
 
-    let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
+    // Carica la catena da disco, o ne crea una nuova al primo avvio
+    let store = ChainStore::new(config.chain_path.clone());
+    let mut chain = store.load_or_create(&identity.name)?;
+    chain.register_authority(&identity.name, identity.signing_key.verifying_key());
+    chain
+        .validate()
+        .map_err(|e| format!("catena non valida su disco: {}", e))?;
+    store.save(&chain)?;
+    println!(
+        "Chain: {} blocchi da {} (autorità: {})",
+        chain.blocks.len(),
+        store.path().display(),
+        identity.name
+    );
+    let blockchain: Arc<Mutex<Blockchain>> = Arc::new(Mutex::new(chain));
 
     // Canale broadcast per i sensori
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(100);
+    let tron_service = TronService::new(config.trongrid_api_key, config.tron_address);
+
+    // I blocchi sigillati dall'API finiscono qui e da qui ai peer
+    let (block_tx, mut block_rx) = mpsc::channel::<BlockAnnouncement>(ANNOUNCEMENT_QUEUE);
 
     // Il loop decide soltanto: nessun provider cloud o Docker viene azionato.
     let metabolic_status = shared_metabolic_status();
@@ -51,27 +79,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     ));
 
     // Avvia nodo P2P
-    let mut swarm = start_p2p_node(Arc::clone(&blockchain)).await?;
+    let mut swarm = start_p2p_node().await?;
+    let mut connected: HashSet<PeerId> = HashSet::new();
+    let mut greeted: HashSet<PeerId> = HashSet::new();
 
     // Configura Rocket
-    let rocket = rocket::build()
-        .manage(Arc::clone(&blockchain))
-        .manage(sensor_tx.clone())
-        .manage(metabolic_status)
-        .mount(
-            "/",
-            routes![
-                get_blocks,
-                get_balances,
-                tron_balance,
-                health,
-                metabolism_status,
-                get_modules,
-                post_sensor,
-                sensor_events
-            ],
-        );
-    let rocket = init_metrics(rocket);
+    let rocket = server::build(ServerContext {
+        blockchain: Arc::clone(&blockchain),
+        identity,
+        store: store.clone(),
+        sensor_tx: sensor_tx.clone(),
+        metabolic_status,
+        tron_service,
+        block_announcer: block_tx,
+    });
 
     // Avvia server gRPC
     let port = 50051;
@@ -90,16 +111,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 match event {
                     SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) => {
                         for (peer_id, addr) in peers {
-                            println!("Discovered peer: {} at {}", peer_id, addr);
-                            swarm.dial(peer_id)?;
+                            info!("peer scoperto: {} su {}", peer_id, addr);
+                            swarm.add_peer_address(peer_id, addr);
+                            // Alla prima comparsa gli chiediamo la catena: se è
+                            // più lunga della nostra la adottiamo.
+                            if greeted.insert(peer_id) {
+                                swarm.behaviour_mut().sync.send_request(&peer_id, SyncRequest::GetChain);
+                            }
                         }
                     }
                     SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Expired(peers))) => {
                         for (peer_id, addr) in peers {
-                            println!("Expired peer: {} at {}", peer_id, addr);
+                            info!("peer scaduto: {} su {}", peer_id, addr);
+                            greeted.remove(&peer_id);
+                        }
+                    }
+                    SwarmEvent::Behaviour(CustomEvent::Sync(event)) => {
+                        handle_sync_event(&mut swarm, &blockchain, Some(&store), event).await;
+                    }
+                    SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                        connected.insert(peer_id);
+                    }
+                    SwarmEvent::ConnectionClosed { peer_id, num_established, .. } => {
+                        if num_established == 0 {
+                            connected.remove(&peer_id);
                         }
                     }
                     _ => {}
+                }
+            }
+            Some(announcement) = block_rx.recv() => {
+                for peer_id in &connected {
+                    swarm
+                        .behaviour_mut()
+                        .sync
+                        .send_request(peer_id, SyncRequest::NewBlock(announcement.clone()));
                 }
             }
             result = async { rocket_handle.as_mut().map(|h| h).unwrap().await }, if rocket_handle.is_some() => {

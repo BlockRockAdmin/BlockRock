@@ -18,6 +18,11 @@ venv/
 # File di configurazione e log
 .env
 /.env
+
+# Stato del nodo: la chiave dell'autorità è una chiave privata, la catena è
+# stato locale. Nessuno dei due va versionato.
+/data/
+*.key
 *.log
 nohup.out
 *.tmp

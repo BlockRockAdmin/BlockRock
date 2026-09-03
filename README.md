@@ -41,6 +41,9 @@ BlockRock/
 Tutte le istruzioni di build, setup, troubleshooting e approfondimenti tecnici sono disponibili nel [Wiki ufficiale](https://github.com/BlockRockAdmin/BlockRock/wiki).  
 Consulta il wiki per guide aggiornate, dettagli sui moduli, esempi e FAQ.
 
+Avvio del nodo, consenso PoA, API REST e sincronizzazione fra nodi sono
+descritti in [docs/nodo.md](docs/nodo.md).
+
 Il ciclo di monitoraggio omeostatico di Zion Core e l'endpoint di telemetria
 `/metabolism` sono descritti in [docs/hypothalamus.md](docs/hypothalamus.md).
 
