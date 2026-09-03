@@ -2,7 +2,6 @@ use blockrock_core::blockchain::Blockchain;
 use libp2p::futures::StreamExt;
 use libp2p::mdns::Event as MdnsEvent;
 use libp2p::swarm::SwarmEvent;
-use rocket::routes;
 use rocket::tokio::sync::broadcast;
 use std::error::Error;
 use std::sync::Arc;
@@ -11,15 +10,14 @@ use tokio::{select, sync::Mutex};
 use zion_core::{
     api::{
         grpc::start_grpc,
-        prometheus::init_metrics,
-        rest::{
-            get_balances, get_blocks, get_modules, health, post_sensor, sensor_events,
-            metabolism_status, tron_balance, SensorReading, TronService,
-        },
+        rest::{SensorReading, TronService},
     },
     config::Config,
+    identity::NodeIdentity,
     monitoring::{run_monitoring_loop, shared_metabolic_status, Hypothalamus, ProcfsVitalsSource},
     network::p2p::{start_p2p_node, CustomEvent},
+    server::{self, ServerContext},
+    storage::ChainStore,
 };
 
 #[tokio::main]
@@ -33,9 +31,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = Config::load()?;
     println!("Tron Address: {}", config.tron_address);
 
-    // Inizializza blockchain
+    // Identità dell'autorità: la chiave con cui questo nodo sigilla i blocchi
+    let identity = NodeIdentity::load_or_create(
+        config.authority_name.clone(),
+        &config.authority_key_path,
+    )?;
 
-    let blockchain = Arc::new(Mutex::new(Blockchain::new("default_authority".to_string())));
+    // Carica la catena da disco, o ne crea una nuova al primo avvio
+    let store = ChainStore::new(config.chain_path.clone());
+    let mut chain = store.load_or_create(&identity.name)?;
+    chain.register_authority(&identity.name, identity.signing_key.verifying_key());
+    chain.validate().map_err(|e| format!("catena non valida su disco: {}", e))?;
+    store.save(&chain)?;
+    println!(
+        "Chain: {} blocchi da {} (autorità: {})",
+        chain.blocks.len(),
+        store.path().display(),
+        identity.name
+    );
+    let blockchain: Arc<Mutex<Blockchain>> = Arc::new(Mutex::new(chain));
 
     // Canale broadcast per i sensori
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(100);
@@ -54,25 +68,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut swarm = start_p2p_node(Arc::clone(&blockchain)).await?;
 
     // Configura Rocket
-    let rocket = rocket::build()
-        .manage(Arc::clone(&blockchain))
-        .manage(sensor_tx.clone())
-        .manage(metabolic_status)
-        .manage(tron_service)
-        .mount(
-            "/",
-            routes![
-                get_blocks,
-                get_balances,
-                tron_balance,
-                health,
-                metabolism_status,
-                get_modules,
-                post_sensor,
-                sensor_events
-            ],
-        );
-    let rocket = init_metrics(rocket);
+    let rocket = server::build(ServerContext {
+        blockchain: Arc::clone(&blockchain),
+        identity,
+        store,
+        sensor_tx: sensor_tx.clone(),
+        metabolic_status,
+        tron_service,
+    });
 
     // Avvia server gRPC
     let port = 50051;

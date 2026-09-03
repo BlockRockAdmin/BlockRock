@@ -30,7 +30,7 @@ impl TransactionService for MyTransactionService {
                 id,
                 sender: tx.sender,
                 recipient: tx.receiver,
-                amount: tx.amount as f32,
+                amount: tx.amount,
             })),
             None => Err(Status::not_found("Transaction not found")),
         }

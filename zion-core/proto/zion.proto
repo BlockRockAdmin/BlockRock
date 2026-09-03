@@ -14,5 +14,5 @@ message TransactionResponse {
   string id = 1;
   string sender = 2;
   string recipient = 3;
-  float amount = 4; // Verifica che sia float
+  uint64 amount = 4;
 }
