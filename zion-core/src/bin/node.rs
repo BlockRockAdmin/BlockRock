@@ -6,10 +6,14 @@ use libp2p::PeerId;
 use rocket::tokio::sync::broadcast;
 use std::collections::HashSet;
 use std::error::Error;
+use std::future::pending;
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::{select, sync::mpsc, sync::Mutex};
-use tracing::info;
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
+use tokio::{select, sync::mpsc, sync::oneshot, sync::Mutex};
+use tracing::{error, info};
 use zion_core::{
     api::{
         grpc::start_grpc,
@@ -94,19 +98,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
         block_announcer: block_tx,
     });
 
-    // Avvia server gRPC
-    let port = 50051;
-    let grpc_handle = tokio::spawn(start_grpc(Arc::clone(&blockchain), port));
 
-    // Avvia server Rocket
+    // Avvia server gRPC. Il canale gli dice quando smettere di servire: senza
+    // di esso il gRPC sopravviveva al resto del nodo.
+    let port = 50051;
+    let (grpc_shutdown_tx, grpc_shutdown_rx) = oneshot::channel::<()>();
+    let grpc_handle = tokio::spawn(start_grpc(Arc::clone(&blockchain), port, async move {
+        let _ = grpc_shutdown_rx.await;
+    }));
+
+    // Accendiamo Rocket prima di lanciarlo: `ignite` restituisce la maniglia
+    // con cui fermarlo con grazia quando arriva il segnale.
+    let rocket = rocket.ignite().await?;
+    let rocket_shutdown = rocket.shutdown();
     let rocket_handle = tokio::spawn(rocket.launch());
 
     // Loop principale per gestire eventi P2P
     let mut rocket_handle = Some(rocket_handle);
     let mut grpc_handle = Some(grpc_handle);
+    let mut grpc_shutdown_tx = Some(grpc_shutdown_tx);
+    // Il futuro del segnale vive fuori dal loop: `select!` cancella i rami che
+    // non si completano, e ricrearlo a ogni giro perderebbe un SIGTERM
+    // arrivato nel frattempo.
+    let mut shutdown = pin!(shutdown_signal());
+    // Vero appena qualcosa — un segnale o la morte di un servizio — decide che
+    // il nodo deve fermarsi. Da lì in poi si aspetta solo che i task escano.
+    let mut stopping = false;
+    let mut failure: Option<String> = None;
 
     loop {
         select! {
+            _ = shutdown.as_mut(), if !stopping => {
+                info!("segnale di arresto ricevuto: fermo i servizi");
+                stopping = true;
+            }
             event = swarm.select_next_some() => {
                 match event {
                     SwarmEvent::Behaviour(CustomEvent::Mdns(MdnsEvent::Discovered(peers))) => {
@@ -148,20 +173,90 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .send_request(peer_id, SyncRequest::NewBlock(announcement.clone()));
                 }
             }
-            result = async { rocket_handle.as_mut().map(|h| h).unwrap().await }, if rocket_handle.is_some() => {
-                result??;
-                println!("Rocket server terminated");
+            result = async { rocket_handle.as_mut().unwrap().await }, if rocket_handle.is_some() => {
                 rocket_handle = None;
+                match result {
+                    Ok(Ok(_)) => info!("server Rocket terminato"),
+                    Ok(Err(e)) => record_failure(&mut failure, format!("server Rocket: {}", e)),
+                    Err(e) => record_failure(&mut failure, format!("task Rocket: {}", e)),
+                }
+                // Senza l'API REST il nodo non offre più nulla: si scende tutti.
+                stopping = true;
             }
-            result = async { grpc_handle.as_mut().map(|h| h).unwrap().await }, if grpc_handle.is_some() => {
-                result??;
-                println!("gRPC server terminated");
+            result = async { grpc_handle.as_mut().unwrap().await }, if grpc_handle.is_some() => {
                 grpc_handle = None;
+                match result {
+                    Ok(Ok(())) => info!("server gRPC terminato"),
+                    // Qui finisce anche la 50051 già occupata: prima uccideva il
+                    // nodo lasciando Rocket in piedi a metà.
+                    Ok(Err(e)) => record_failure(&mut failure, format!("server gRPC: {}", e)),
+                    Err(e) => record_failure(&mut failure, format!("task gRPC: {}", e)),
+                }
+                stopping = true;
             }
-            else => break,
+        }
+
+        if stopping {
+            // Entrambe le maniglie sono idempotenti: `notify` lavora su un clone
+            // e il oneshot si consuma al primo `take`.
+            rocket_shutdown.clone().notify();
+            if let Some(tx) = grpc_shutdown_tx.take() {
+                let _ = tx.send(());
+            }
+        }
+
+        // Si esce solo quando i due server hanno davvero chiuso, così il loop
+        // P2P resta reattivo mentre drenano.
+        if rocket_handle.is_none() && grpc_handle.is_none() {
+            break;
         }
     }
 
     metabolic_handle.abort();
+
+    if let Some(message) = failure {
+        return Err(message.into());
+    }
+    info!("nodo arrestato");
     Ok(())
+}
+
+/// Tiene il primo errore: è quello che ha innescato l'arresto, gli altri sono
+/// la sua eco.
+fn record_failure(slot: &mut Option<String>, message: String) {
+    error!("{}", message);
+    slot.get_or_insert(message);
+}
+
+/// Si risolve a Ctrl-C o SIGTERM, i due modi in cui a questo nodo viene chiesto
+/// di fermarsi. Se un handler non si registra restiamo in ascolto sull'altro
+/// invece di fingere un arresto.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            error!("impossibile ascoltare Ctrl-C: {}", e);
+            pending::<()>().await;
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match signal(SignalKind::terminate()) {
+            Ok(mut stream) => {
+                stream.recv().await;
+            }
+            Err(e) => {
+                error!("impossibile ascoltare SIGTERM: {}", e);
+                pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = pending::<()>();
+
+    select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
 }

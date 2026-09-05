@@ -19,4 +19,4 @@ export TRON_ADDRESS
 
 # Run the node from the zion-core directory relative to the script
 cd "$SCRIPT_DIR/zion-core"
-cargo +nightly run --release --bin node
+cargo run --release --bin node

@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
@@ -37,7 +38,14 @@ impl TransactionService for MyTransactionService {
     }
 }
 
-pub async fn start_grpc(blockchain: Arc<Mutex<Blockchain>>, port: u16) -> Result<(), anyhow::Error> {
+/// Serves the transaction API until `shutdown` resolves. The caller owns that
+/// future, so the gRPC half stops on the same signal as the rest of the node
+/// instead of outliving it.
+pub async fn start_grpc(
+    blockchain: Arc<Mutex<Blockchain>>,
+    port: u16,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<(), anyhow::Error> {
     let addr = format!("0.0.0.0:{}", port).parse()?;
     let service = MyTransactionService { blockchain };
     let reflection_service = ReflectionBuilder::configure()
@@ -46,7 +54,7 @@ pub async fn start_grpc(blockchain: Arc<Mutex<Blockchain>>, port: u16) -> Result
     Server::builder()
         .add_service(TransactionServiceServer::new(service))
         .add_service(reflection_service)
-        .serve(addr)
+        .serve_with_shutdown(addr, shutdown)
         .await?;
     Ok(())
 }
