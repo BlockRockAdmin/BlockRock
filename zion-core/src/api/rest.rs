@@ -94,14 +94,15 @@ pub struct SubmitTransaction {
 #[derive(Debug, Serialize)]
 pub struct TransactionAccepted {
     pub id: String,
-    pub block_index: u32,
+    /// Number of transactions currently waiting in the mempool (including this
+    /// one). The transaction will be sealed into a block on the next block-time
+    /// tick.
+    pub pending: usize,
 }
 
-/// Accepts a signed transfer, seals it into a block with this node's authority
-/// key, persists the chain and announces the block to the peers.
-///
-/// One transaction per block: a mempool that batches pending transfers is the
-/// natural next step, not a change of contract.
+/// Accepts a signed transfer and queues it in the mempool. The transaction is
+/// **not** immediately sealed into a block; the node's block-time loop batches
+/// pending transactions periodically.
 #[post("/transactions", format = "json", data = "<submission>")]
 pub async fn submit_transaction(
     submission: Json<SubmitTransaction>,
@@ -129,24 +130,34 @@ pub async fn submit_transaction(
     let id = transaction.id.clone();
 
     let mut blockchain = state.lock().await;
-    let block_index = blockchain
-        .add_block(vec![transaction], &identity.name, &identity.signing_key)
+    blockchain
+        .queue_transaction(transaction)
         .map_err(bad_request)?;
 
-    store.save(&blockchain).map_err(|error| {
-        failure(
-            Status::InternalServerError,
-            format!("block {} accepted but not persisted: {}", block_index, error),
-        )
-    })?;
+    let pending = blockchain.pending_count();
 
-    if let Some(block) = blockchain.blocks.last() {
-        let announcement = announcement_of(&blockchain, block.clone());
-        drop(blockchain);
-        let _ = announcer.try_send(announcement);
+    // Try to seal immediately if the mempool has enough transactions. This
+    // keeps latency low when traffic is bursty while still allowing batching.
+    let sealed = blockchain
+        .seal_mempool(&identity.name, &identity.signing_key)
+        .map_err(|e| failure(Status::InternalServerError, e))?;
+
+    if sealed.is_some() {
+        store.save(&blockchain).map_err(|error| {
+            failure(
+                Status::InternalServerError,
+                format!("block sealed but not persisted: {}", error),
+            )
+        })?;
+
+        if let Some(block) = blockchain.blocks.last() {
+            let announcement = announcement_of(&blockchain, block.clone());
+            drop(blockchain);
+            let _ = announcer.try_send(announcement);
+        }
     }
 
-    Ok(Json(TransactionAccepted { id, block_index }))
+    Ok(Json(TransactionAccepted { id, pending }))
 }
 
 #[derive(Debug, Deserialize)]

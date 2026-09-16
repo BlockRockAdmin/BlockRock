@@ -1,4 +1,5 @@
 use super::block::Block;
+use super::mempool::Mempool;
 use super::transaction::{Amount, Transaction};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -126,6 +127,10 @@ pub struct Blockchain {
     /// Runtime-only index: transaction queries must not scan the entire chain.
     #[serde(skip)]
     transaction_index: HashMap<String, (usize, usize)>,
+    /// Pending transactions waiting to be sealed into a block. Not persisted:
+    /// on restart they are lost, which is acceptable for a best-effort layer.
+    #[serde(skip)]
+    pub mempool: Mempool,
 }
 
 impl Blockchain {
@@ -156,6 +161,7 @@ impl Blockchain {
             nonces: HashMap::new(),
             public_keys: HashMap::new(),
             transaction_index: HashMap::new(),
+            mempool: Mempool::new(),
         };
         blockchain.rebuild_transaction_index();
         blockchain
@@ -187,6 +193,40 @@ impl Blockchain {
 
     pub fn genesis_hash(&self) -> Option<&str> {
         self.blocks.first().map(|block| block.hash.as_str())
+    }
+
+    /// Validates `transaction` and adds it to the mempool. The transaction is
+    /// **not** immediately sealed into a block; call [`seal_mempool`] to batch
+    /// pending transactions into the next block.
+    pub fn queue_transaction(&mut self, transaction: Transaction) -> Result<String, ChainError> {
+        let tx_exists = self.get_transaction(&transaction.id).is_some();
+        self.mempool.queue(
+            transaction,
+            &self.public_keys,
+            &self.balances,
+            &self.nonces,
+            tx_exists,
+        )
+    }
+
+    /// Returns the number of transactions currently waiting in the mempool.
+    pub fn pending_count(&self) -> usize {
+        self.mempool.len()
+    }
+
+    /// Drains the mempool and seals all pending transactions into a new block.
+    /// Returns the block index, or `None` if the mempool was empty.
+    pub fn seal_mempool(
+        &mut self,
+        authority: &str,
+        signing_key: &SigningKey,
+    ) -> Result<Option<u32>, ChainError> {
+        let transactions = self.mempool.drain();
+        if transactions.is_empty() {
+            return Ok(None);
+        }
+        let index = self.add_block(transactions, authority, signing_key)?;
+        Ok(Some(index))
     }
 
     /// Seals `transactions` into a new block. The signing key must belong to an

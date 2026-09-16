@@ -25,7 +25,7 @@ use zion_core::{
     network::{
         p2p::{start_p2p_node, CustomEvent},
         service::handle_sync_event,
-        sync::{BlockAnnouncement, SyncRequest},
+        sync::{announcement_of, BlockAnnouncement, SyncRequest},
     },
     server::{self, ServerContext},
     storage::ChainStore,
@@ -34,6 +34,10 @@ use zion_core::{
 /// Blocks waiting to be pushed to the peers. Sealing is much faster than
 /// broadcasting, so the queue absorbs bursts.
 const ANNOUNCEMENT_QUEUE: usize = 64;
+/// How often the node tries to seal pending transactions into a block.
+/// A value of 0 disables the periodic tick (transactions are still sealed
+/// eagerly by the REST endpoint when the mempool reaches a threshold).
+const BLOCK_TIME_MS: u64 = 5_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -81,6 +85,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Arc::clone(&metabolic_status),
         Duration::from_secs(15),
     ));
+
+    // Block-time loop: periodically drains the mempool and seals a block.
+    // This is the heartbeat that turns individual transactions into blocks.
+    let blockchain_for_tick = Arc::clone(&blockchain);
+    let identity_for_tick = identity.clone();
+    let store_for_tick = store.clone();
+    let block_tx_for_tick = block_tx.clone();
+    let mut block_tick = if BLOCK_TIME_MS > 0 {
+        Some(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_millis(BLOCK_TIME_MS));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let mut chain = blockchain_for_tick.lock().await;
+                match chain.seal_mempool(&identity_for_tick.name, &identity_for_tick.signing_key) {
+                    Ok(Some(index)) => {
+                        info!("blocco {} sigillato dal tick periodico", index);
+                        if let Err(e) = store_for_tick.save(&chain) {
+                            error!("salvataggio catena fallito dopo tick: {}", e);
+                        }
+                        if let Some(block) = chain.blocks.last() {
+                            let announcement = announcement_of(&chain, block.clone());
+                            drop(chain);
+                            let _ = block_tx_for_tick.try_send(announcement);
+                        }
+                    }
+                    Ok(None) => { /* mempool vuoto, niente da sigillare */ }
+                    Err(e) => error!("tick periodico fallito: {}", e),
+                }
+            }
+        }))
+    } else {
+        None
+    };
 
     // Avvia nodo P2P
     let mut swarm = start_p2p_node().await?;
@@ -213,6 +251,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     metabolic_handle.abort();
+    if let Some(handle) = block_tick.take() {
+        handle.abort();
+    }
 
     if let Some(message) = failure {
         return Err(message.into());

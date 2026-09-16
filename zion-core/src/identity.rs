@@ -5,6 +5,7 @@ use std::io;
 use std::path::Path;
 
 /// The authority this node seals its blocks with.
+#[derive(Clone)]
 pub struct NodeIdentity {
     pub name: String,
     pub signing_key: SigningKey,
