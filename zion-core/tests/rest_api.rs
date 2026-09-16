@@ -6,6 +6,7 @@ use rocket::http::{ContentType, Status};
 use rocket::local::asynchronous::Client;
 use rocket::tokio::sync::broadcast;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::{mpsc, Mutex};
@@ -31,7 +32,7 @@ async fn start_node() -> TestNode {
         NodeIdentity::load_or_create("blockrock".to_string(), dir.path().join("authority.key"))
             .unwrap();
 
-    let mut chain = store.load_or_create(&identity.name).unwrap();
+    let mut chain = store.load_or_create(&identity.name, HashMap::new()).unwrap();
     chain.register_authority(&identity.name, identity.signing_key.verifying_key());
     store.save(&chain).unwrap();
 
@@ -121,7 +122,9 @@ async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     )
     .await;
     assert_eq!(status, Status::Ok);
-    assert_eq!(accepted["block_index"], 1);
+    // After mempool: response carries `pending` count, not `block_index`.
+    // The transaction is sealed eagerly when the mempool has entries.
+    assert!(accepted["pending"].as_u64().is_some());
 
     let balances: Value = serde_json::from_str(
         &node

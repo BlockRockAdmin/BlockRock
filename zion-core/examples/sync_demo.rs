@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let authority = SigningKey::generate(&mut OsRng);
     let alice = SigningKey::generate(&mut OsRng);
 
-    let mut author = Blockchain::new("blockrock".to_string());
+    let mut author = Blockchain::new_single("blockrock".to_string());
     author.register_authority("blockrock", authority.verifying_key());
     author.add_public_key("Alice", alice.verifying_key());
     author.add_block(
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         &authority,
     )?;
 
-    let mut follower = Blockchain::new("blockrock".to_string());
+    let mut follower = Blockchain::new_single("blockrock".to_string());
     follower.register_authority("blockrock", authority.verifying_key());
     println!(
         "genesis condiviso: {}",

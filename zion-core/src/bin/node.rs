@@ -54,9 +54,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let identity =
         NodeIdentity::load_or_create(config.authority_name.clone(), &config.authority_key_path)?;
 
-    // Carica la catena da disco, o ne crea una nuova al primo avvio
+    // Carica la catena da disco, o ne crea una nuova al primo avvio.
+    // Le autorità iniziali da env INITIAL_AUTHORITIES sono usate solo
+    // quando la catena viene creata per la prima volta.
     let store = ChainStore::new(config.chain_path.clone());
-    let mut chain = store.load_or_create(&identity.name)?;
+    let mut chain = store.load_or_create(&identity.name, config.initial_authorities.clone())?;
     chain.register_authority(&identity.name, identity.signing_key.verifying_key());
     chain
         .validate()

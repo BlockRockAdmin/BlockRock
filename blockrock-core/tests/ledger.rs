@@ -3,6 +3,7 @@ use blockrock_core::blockchain::{Blockchain, ChainError};
 use blockrock_core::transaction::Transaction;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
+use std::collections::HashMap;
 
 struct Fixture {
     chain: Blockchain,
@@ -13,7 +14,7 @@ struct Fixture {
 fn fixture() -> Fixture {
     let authority_key = SigningKey::generate(&mut OsRng);
     let alice_key = SigningKey::generate(&mut OsRng);
-    let mut chain = Blockchain::new("Node1".to_string());
+    let mut chain = Blockchain::new_single("Node1".to_string());
     chain.register_authority("Node1", authority_key.verifying_key());
     chain.add_public_key("Alice", alice_key.verifying_key());
     Fixture {
@@ -223,7 +224,7 @@ fn a_longer_valid_chain_is_adopted() {
         alice_key,
     } = fixture();
 
-    let mut peer = Blockchain::new("Node1".to_string());
+    let mut peer = Blockchain::new_single("Node1".to_string());
     peer.register_authority("Node1", authority_key.verifying_key());
     peer.add_public_key("Alice", alice_key.verifying_key());
 
@@ -251,7 +252,7 @@ fn a_longer_valid_chain_is_adopted() {
 fn a_chain_from_another_network_is_refused() {
     let Fixture { mut chain, .. } = fixture();
 
-    let mut stranger = Blockchain::new("OtherNode".to_string());
+    let mut stranger = Blockchain::new_single("OtherNode".to_string());
     let stranger_key = SigningKey::generate(&mut OsRng);
     stranger.register_authority("OtherNode", stranger_key.verifying_key());
     stranger
@@ -278,7 +279,7 @@ fn a_longer_chain_sealed_by_an_unknown_authority_is_refused() {
 
     // Same genesis (same authority name and allocation), but the extra blocks
     // are sealed by a key this node does not trust.
-    let mut attacker = Blockchain::new("Node1".to_string());
+    let mut attacker = Blockchain::new_single("Node1".to_string());
     let attacker_key = SigningKey::generate(&mut OsRng);
     attacker.register_authority("Node1", attacker_key.verifying_key());
     attacker
@@ -292,4 +293,36 @@ fn a_longer_chain_sealed_by_an_unknown_authority_is_refused() {
     );
     assert_eq!(chain.blocks.len(), 1);
     let _ = authority_key;
+}
+
+#[test]
+fn two_authorities_can_both_seal_blocks() {
+    let alice = SigningKey::generate(&mut OsRng);
+    let bob = SigningKey::generate(&mut OsRng);
+
+    // Bootstrap a chain with two authorities at genesis.
+    let mut initial = HashMap::new();
+    initial.insert("Alice".to_string(), alice.verifying_key());
+    initial.insert("Bob".to_string(), bob.verifying_key());
+
+    let mut chain = Blockchain::new("Alice".to_string(), initial);
+    // The local authority is always included; Bob must also be registered.
+    chain.register_authority("Bob", bob.verifying_key());
+
+    // Alice seals a block.
+    chain
+        .add_block(Vec::new(), "Alice", &alice)
+        .unwrap();
+    assert_eq!(chain.blocks.len(), 2);
+
+    // Bob seals the next block.
+    chain
+        .add_block(Vec::new(), "Bob", &bob)
+        .unwrap();
+    assert_eq!(chain.blocks.len(), 3);
+
+    // Both authorities are recognised.
+    assert!(chain.authorities.contains("Alice"));
+    assert!(chain.authorities.contains("Bob"));
+    assert!(chain.validate_chain());
 }

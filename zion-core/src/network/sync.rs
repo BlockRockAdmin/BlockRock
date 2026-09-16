@@ -7,23 +7,34 @@ use blockrock_core::block::Block;
 use blockrock_core::blockchain::{Blockchain, ChainError};
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Sender keys travel with blocks: a peer cannot verify a transaction whose
 /// sender it never saw registered. Registering accounts on chain would remove
 /// the need for this, and is the natural next step.
 pub type Accounts = HashMap<String, VerifyingKey>;
 
+/// Authority names that are allowed to seal blocks. Synced alongside the chain
+/// so every node agrees on who the validators are.
+pub type Authorities = HashSet<String>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockAnnouncement {
     pub block: Block,
     pub accounts: Accounts,
+    /// Authorities known to the announcing node. Merged so new nodes learn
+    /// the validator set without re-syncing the whole chain.
+    #[serde(default)]
+    pub authorities: Authorities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainSnapshot {
     pub blocks: Vec<Block>,
     pub accounts: Accounts,
+    /// The full authority set at the tip of this chain.
+    #[serde(default)]
+    pub authorities: Authorities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +65,7 @@ pub fn snapshot_of(chain: &Blockchain) -> ChainSnapshot {
     ChainSnapshot {
         blocks: chain.get_blocks(),
         accounts: chain.public_keys.clone(),
+        authorities: chain.authorities.clone(),
     }
 }
 
@@ -61,6 +73,7 @@ pub fn announcement_of(chain: &Blockchain, block: Block) -> BlockAnnouncement {
     BlockAnnouncement {
         block,
         accounts: chain.public_keys.clone(),
+        authorities: chain.authorities.clone(),
     }
 }
 
@@ -71,7 +84,7 @@ pub fn apply_announcement(
     chain: &mut Blockchain,
     announcement: BlockAnnouncement,
 ) -> Result<BlockOutcome, ChainError> {
-    let BlockAnnouncement { block, accounts } = announcement;
+    let BlockAnnouncement { block, accounts, authorities } = announcement;
     let height = chain.blocks.len() as u32;
 
     if block.index < height {
@@ -91,6 +104,7 @@ pub fn apply_announcement(
     }
 
     merge_accounts(chain, accounts);
+    merge_authorities(chain, authorities);
     chain.try_append_block(block)?;
     Ok(BlockOutcome::Appended)
 }
@@ -102,6 +116,7 @@ pub fn apply_snapshot(chain: &mut Blockchain, snapshot: ChainSnapshot) -> Result
         return Ok(false);
     }
     merge_accounts(chain, snapshot.accounts);
+    merge_authorities(chain, snapshot.authorities);
     chain.try_adopt_chain(snapshot.blocks)
 }
 
@@ -111,6 +126,18 @@ fn merge_accounts(chain: &mut Blockchain, accounts: Accounts) {
     for (name, key) in accounts {
         if chain.public_key(&name).is_none() {
             chain.add_public_key(&name, key);
+        }
+    }
+}
+
+/// Learns authority names we do not know yet. An authority name we already
+/// recognise is not overwritten, but we never learn a new authority's key
+/// through this path alone — the key must already be in `public_keys` (which
+/// is merged just before this call).
+fn merge_authorities(chain: &mut Blockchain, authorities: Authorities) {
+    for name in authorities {
+        if !chain.authorities.contains(&name) && chain.public_key(&name).is_some() {
+            chain.authorities.insert(name);
         }
     }
 }
@@ -137,7 +164,7 @@ mod tests {
 
         /// A node that trusts the authority but has never heard of Alice.
         fn node(&self) -> Blockchain {
-            let mut chain = Blockchain::new("blockrock".to_string());
+            let mut chain = Blockchain::new_single("blockrock".to_string());
             chain.register_authority("blockrock", self.authority.verifying_key());
             chain
         }
@@ -263,5 +290,39 @@ mod tests {
             Err(ChainError::InvalidSeal(1))
         );
         assert_eq!(receiver.blocks.len(), 1);
+    }
+
+    #[test]
+    fn authority_set_is_synced_with_chain() {
+        let alice = SigningKey::generate(&mut OsRng);
+        let bob = SigningKey::generate(&mut OsRng);
+
+        // Node A: two authorities at genesis. The local authority's key must
+        // be registered explicitly (the same way node.rs does it).
+        let mut initial = HashMap::new();
+        initial.insert("Bob".to_string(), bob.verifying_key());
+        let mut author = Blockchain::new("Alice".to_string(), initial);
+        author.register_authority("Alice", alice.verifying_key());
+        author.register_authority("Bob", bob.verifying_key());
+
+        // Alice seals a block.
+        author.add_block(Vec::new(), "Alice", &alice).unwrap();
+
+        // Node B: starts with only Alice, learns Bob via sync.
+        let mut follower = Blockchain::new_single("Alice".to_string());
+        follower.register_authority("Alice", alice.verifying_key());
+
+        // Sync the chain snapshot.
+        let snapshot = snapshot_of(&author);
+        assert!(apply_snapshot(&mut follower, snapshot).unwrap());
+
+        // Follower now knows both authorities.
+        assert!(follower.authorities.contains("Alice"));
+        assert!(follower.authorities.contains("Bob"));
+        assert!(follower.public_key("Bob").is_some());
+
+        // Bob can now seal a block on the follower's chain.
+        follower.add_block(Vec::new(), "Bob", &bob).unwrap();
+        assert!(follower.validate_chain());
     }
 }

@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn queue_valid_transaction() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
 
         let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 30, 0, &key);
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn reject_duplicate_in_pool() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
 
         let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 30, 0, &key);
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn reject_insufficient_funds() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
         // Alice starts with 100, try to send 200
         let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 200, 0, &key);
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn reject_wrong_nonce() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
         // Nonce should be 0, but we send 5
         let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 5, &key);
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn drain_returns_sorted() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
         chain.add_public_key("Bob", key.verifying_key());
 
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn queue_considers_already_spent() {
         let key = alice_key();
-        let mut chain = Blockchain::new("test".to_string());
+        let mut chain = Blockchain::new_single("test".to_string());
         chain.add_public_key("Alice", key.verifying_key());
         // Alice has 100. Queue 60, then try to queue another 60 → should fail.
         let tx1 = Transaction::new("Alice".to_string(), "Bob".to_string(), 60, 0, &key);

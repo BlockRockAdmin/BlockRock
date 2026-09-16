@@ -134,7 +134,20 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
-    pub fn new(authority: String) -> Self {
+    /// Creates a new chain with a single authority. Convenience wrapper for
+    /// tests and single-validator networks.
+    pub fn new_single(authority: String) -> Self {
+        Self::new(authority, HashMap::new())
+    }
+
+    /// Creates a new chain whose genesis block is sealed by `authority`.
+    /// `initial_authorities` lists additional authorities (name → public key)
+    /// that are allowed to seal blocks from the start. The local `authority`
+    /// is always included automatically.
+    pub fn new(
+        authority: String,
+        initial_authorities: HashMap<String, VerifyingKey>,
+    ) -> Self {
         let initial_balances = HashMap::from([
             (MINT_ACCOUNT.to_string(), 1000),
             ("Alice".to_string(), 100),
@@ -152,14 +165,21 @@ impl Blockchain {
             GENESIS_TIMESTAMP,
         );
 
+        let mut authorities: HashSet<String> = HashSet::from([authority.clone()]);
+        let mut public_keys: HashMap<String, VerifyingKey> = HashMap::new();
+        for (name, key) in initial_authorities {
+            authorities.insert(name.clone());
+            public_keys.insert(name, key);
+        }
+
         let mut blockchain = Blockchain {
             blocks: vec![genesis],
-            authorities: HashSet::from([authority.clone()]),
+            authorities,
             authority,
             balances: initial_balances.clone(),
             initial_balances,
             nonces: HashMap::new(),
-            public_keys: HashMap::new(),
+            public_keys,
             transaction_index: HashMap::new(),
             mempool: Mempool::new(),
         };

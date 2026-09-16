@@ -9,7 +9,7 @@ fn save_and_load_chain() {
     let authority_key = SigningKey::generate(&mut OsRng);
     let alice_key = SigningKey::generate(&mut OsRng);
 
-    let mut chain = Blockchain::new("Node1".to_string());
+    let mut chain = Blockchain::new_single("Node1".to_string());
     chain.register_authority("Node1", authority_key.verifying_key());
     chain.add_public_key("Alice", alice_key.verifying_key());
 

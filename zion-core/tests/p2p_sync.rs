@@ -80,11 +80,11 @@ async fn a_node_catches_up_and_then_follows_new_blocks() {
     let alice = SigningKey::generate(&mut OsRng);
 
     // Both nodes trust the same authority; only the author knows Alice.
-    let mut author_chain = Blockchain::new("blockrock".to_string());
+    let mut author_chain = Blockchain::new_single("blockrock".to_string());
     author_chain.register_authority("blockrock", authority.verifying_key());
     author_chain.add_public_key("Alice", alice.verifying_key());
 
-    let mut follower_chain = Blockchain::new("blockrock".to_string());
+    let mut follower_chain = Blockchain::new_single("blockrock".to_string());
     follower_chain.register_authority("blockrock", authority.verifying_key());
     assert_eq!(author_chain.genesis_hash(), follower_chain.genesis_hash());
 
