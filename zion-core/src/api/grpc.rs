@@ -106,6 +106,9 @@ impl TransactionService for MyTransactionService {
         .await
         .map_err(|error| match error {
             SubmitError::Rejected(message) => Status::invalid_argument(message),
+            // ResourceExhausted, non InvalidArgument: e' il codice che le retry
+            // policy gRPC riconoscono come ritentabile.
+            SubmitError::Busy(message) => Status::resource_exhausted(message),
             SubmitError::Internal(message) => Status::internal(message),
         })?;
 

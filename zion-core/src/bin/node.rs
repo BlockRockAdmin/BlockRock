@@ -41,7 +41,7 @@ const ANNOUNCEMENT_QUEUE: usize = 64;
 /// How often the node tries to seal pending transactions into a block.
 /// A value of 0 disables the periodic tick (transactions are still sealed
 /// eagerly by the REST endpoint when the mempool reaches a threshold).
-const BLOCK_TIME_MS: u64 = 5_000;
+const BLOCK_TIME_MS: u64 = ledger::BLOCK_TIME.as_millis() as u64;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

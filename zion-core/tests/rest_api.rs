@@ -397,3 +397,129 @@ async fn a_replayed_reading_is_refused() {
     let (second, _) = commit_reading(&node.client, body).await;
     assert_eq!(second, Status::BadRequest);
 }
+
+// --- Saturazione: cosa vede il client ---------------------------------------
+
+/// Riempie il mempool fino al suo tetto, senza passare dall'API: qui interessa
+/// come il nodo risponde quando e' pieno, non quanto ci mette a riempirsi.
+async fn fill_mempool(node: &TestNode) {
+    let filler = "x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES);
+    let mut chain = node.blockchain.lock().await;
+    let mut i = 0;
+    loop {
+        let name = format!("riempitivo{}", i);
+        let key = SigningKey::generate(&mut OsRng);
+        chain.add_public_key(&name, key.verifying_key());
+        let tx = Transaction::new_with_payload(
+            name.clone(),
+            name,
+            0,
+            0,
+            Some(filler.clone()),
+            &key,
+        );
+        if chain.queue_transaction(tx).is_err() {
+            break;
+        }
+        i += 1;
+        assert!(i < 10_000, "il mempool non si riempie");
+    }
+}
+
+/// Una lettura al massimo della taglia consentita: dopo che il pool e' pieno di
+/// payload grossi, il margine rimasto non basta piu' per una di queste.
+fn big_reading(key: &SigningKey, sensor: &str, nonce: u64) -> Value {
+    let value = "x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES);
+    let signature = key.sign(
+        &Transaction::unsigned_with_payload(
+            sensor.to_string(),
+            sensor.to_string(),
+            0,
+            nonce,
+            Some(value.clone()),
+        )
+        .signing_payload(),
+    );
+    json!({
+        "sensor_id": sensor,
+        "value": value,
+        "nonce": nonce,
+        "signature": hex::encode(signature.to_bytes()),
+    })
+}
+
+#[rocket::async_test]
+async fn a_saturated_node_asks_the_client_to_back_off() {
+    let node = start_node().await;
+    let sensor = SigningKey::generate(&mut OsRng);
+    register(&node.client, "termometro", &sensor).await;
+    fill_mempool(&node).await;
+
+    let response = node
+        .client
+        .post("/sensors/commit")
+        .header(ContentType::JSON)
+        .body(big_reading(&sensor, "termometro", 0).to_string())
+        .dispatch()
+        .await;
+
+    // 429, non 400: la lettura e' valida, e' il nodo a essere pieno. Un 400
+    // direbbe al client di non riprovare, che e' l'opposto di quel che serve.
+    assert_eq!(response.status(), Status::TooManyRequests);
+
+    let retry_after = response
+        .headers()
+        .get_one("Retry-After")
+        .expect("un 429 senza Retry-After non dice al client quanto aspettare");
+    let seconds: u64 = retry_after.parse().expect("Retry-After in secondi");
+    assert!(seconds >= 1, "attesa suggerita non sensata: {}", seconds);
+
+    let body: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("mempool is full"),
+        "il motivo deve essere esplicito: {}",
+        body["error"]
+    );
+}
+
+#[rocket::async_test]
+async fn a_small_transaction_still_fits_while_the_pool_is_nearly_full() {
+    // Il tetto e' sui byte, non sul numero: finche' c'e' margine una
+    // transazione piccola deve passare anche con il pool quasi pieno.
+    let node = start_node().await;
+    let alice = SigningKey::generate(&mut OsRng);
+    register(&node.client, "Alice", &alice).await;
+    fill_mempool(&node).await;
+
+    let (status, _) = submit(
+        &node.client,
+        json!({
+            "sender": "Alice",
+            "receiver": "Bob",
+            "amount": 10,
+            "nonce": 0,
+            "signature": sign(&alice, "Alice", "Bob", 10, 0),
+        }),
+    )
+    .await;
+    assert_eq!(status, Status::Ok);
+}
+
+#[rocket::async_test]
+async fn the_same_reading_is_accepted_once_the_block_has_been_sealed() {
+    let node = start_node().await;
+    let sensor = SigningKey::generate(&mut OsRng);
+    register(&node.client, "termometro", &sensor).await;
+    fill_mempool(&node).await;
+
+    let reading = big_reading(&sensor, "termometro", 0);
+    let (status, _) = commit_reading(&node.client, reading.clone()).await;
+    assert_eq!(status, Status::TooManyRequests);
+
+    // Il backoff ha senso solo se l'attesa serve davvero: dopo il blocco la
+    // stessa identica lettura deve passare.
+    node.seal().await;
+
+    let (status, _) = commit_reading(&node.client, reading).await;
+    assert_eq!(status, Status::Ok);
+}

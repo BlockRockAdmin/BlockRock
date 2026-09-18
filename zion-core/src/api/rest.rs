@@ -5,12 +5,13 @@ use blockrock_core::{
 };
 use ed25519_dalek::{Signature, VerifyingKey};
 use reqwest::Client;
-use rocket::http::Status;
+use rocket::http::{Header, Status};
 use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
+use rocket::response::Responder;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::sync::broadcast::{error::RecvError, Sender};
-use rocket::{get, post, State};
+use rocket::{get, post, Request, State};
 use serde_json::Value;
 use std::fmt;
 use std::sync::Arc;
@@ -50,15 +51,45 @@ pub struct ApiError {
     pub error: String,
 }
 
-type ApiFailure = (Status, Json<ApiError>);
+/// Un errore dell'API. Porta un `Retry-After` solo quando riprovare ha senso:
+/// e' il segnale con cui un client distingue il backoff dalla rinuncia.
+pub struct ApiFailure {
+    status: Status,
+    body: ApiError,
+    retry_after: Option<Header<'static>>,
+}
+
+impl<'r> Responder<'r, 'static> for ApiFailure {
+    fn respond_to(self, request: &'r Request<'_>) -> rocket::response::Result<'static> {
+        let mut response = (self.status, Json(self.body)).respond_to(request)?;
+        if let Some(header) = self.retry_after {
+            response.set_header(header);
+        }
+        Ok(response)
+    }
+}
 
 fn failure(status: Status, message: impl fmt::Display) -> ApiFailure {
-    (
+    ApiFailure {
         status,
-        Json(ApiError {
+        body: ApiError {
             error: message.to_string(),
-        }),
-    )
+        },
+        retry_after: None,
+    }
+}
+
+/// Il nodo e' pieno: 429 con l'attesa suggerita, che e' il tempo entro cui il
+/// prossimo blocco svuotera' il mempool.
+fn too_many_requests(message: impl fmt::Display) -> ApiFailure {
+    let seconds = ledger::BLOCK_TIME.as_secs().max(1);
+    ApiFailure {
+        status: Status::TooManyRequests,
+        body: ApiError {
+            error: message.to_string(),
+        },
+        retry_after: Some(Header::new("Retry-After", seconds.to_string())),
+    }
 }
 
 fn bad_request(message: impl fmt::Display) -> ApiFailure {
@@ -137,6 +168,7 @@ async fn queue_and_maybe_seal(
     match ledger::submit(transaction, state, identity, store, announcer).await {
         Ok(queued) => Ok(queued.pending),
         Err(SubmitError::Rejected(message)) => Err(bad_request(message)),
+        Err(SubmitError::Busy(message)) => Err(too_many_requests(message)),
         Err(SubmitError::Internal(message)) => Err(failure(Status::InternalServerError, message)),
     }
 }

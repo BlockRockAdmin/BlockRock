@@ -5,9 +5,10 @@
 //! protegge il conto di conio finirebbe su una porta sola.
 
 use blockrock_core::{
-    blockchain::{Blockchain, MINT_ACCOUNT},
+    blockchain::{Blockchain, ChainError, MINT_ACCOUNT},
     transaction::Transaction,
 };
+use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -15,6 +16,11 @@ use crate::api::rest::BlockAnnouncer;
 use crate::identity::NodeIdentity;
 use crate::network::sync::announcement_of;
 use crate::storage::ChainStore;
+
+/// Ogni quanto il nodo chiude un blocco. Vive qui e non in `main` perche' e'
+/// una proprieta' del nodo: il tick la usa per il proprio intervallo, e l'API
+/// per dire a un client saturato fra quanto ha senso riprovare.
+pub const BLOCK_TIME: Duration = Duration::from_secs(5);
 
 /// Transazione accettata: il suo id e quante ne restano in attesa.
 pub struct Queued {
@@ -26,8 +32,14 @@ pub struct Queued {
 /// interfaccia la traduce nel proprio codice d'errore senza indovinare.
 #[derive(Debug)]
 pub enum SubmitError {
-    /// Il chiamante ha sbagliato: firma, nonce, fondi, duplicato.
+    /// Il chiamante ha sbagliato: firma, nonce, fondi, duplicato. Riprovare
+    /// tale e quale non cambiera' l'esito.
     Rejected(String),
+    /// Il nodo e' momentaneamente pieno. Non e' colpa della transazione, che
+    /// tornera' accettabile appena il prossimo blocco svuota il mempool: va
+    /// distinta da `Rejected` perche' e' l'unico caso in cui il client deve
+    /// riprovare, e con un'attesa.
+    Busy(String),
     /// Il nodo non ce l'ha fatta: per esempio un blocco sigillato ma non
     /// persistito, che non e' colpa di chi ha inviato.
     Internal(String),
@@ -36,9 +48,9 @@ pub enum SubmitError {
 impl std::fmt::Display for SubmitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SubmitError::Rejected(message) | SubmitError::Internal(message) => {
-                write!(f, "{}", message)
-            }
+            SubmitError::Rejected(message)
+            | SubmitError::Busy(message)
+            | SubmitError::Internal(message) => write!(f, "{}", message),
         }
     }
 }
@@ -63,9 +75,16 @@ pub async fn submit(
 
     let id = transaction.id.clone();
     let mut chain = blockchain.lock().await;
-    chain
-        .queue_transaction(transaction)
-        .map_err(|e| SubmitError::Rejected(e.to_string()))?;
+    chain.queue_transaction(transaction).map_err(|error| {
+        let message = error.to_string();
+        match error {
+            // Il pool pieno e' una condizione del nodo, non un difetto della
+            // transazione: dirlo come "richiesta malformata" direbbe al client
+            // di non riprovare, che e' l'opposto di quello che serve.
+            ChainError::MempoolFull { .. } => SubmitError::Busy(message),
+            _ => SubmitError::Rejected(message),
+        }
+    })?;
 
     let pending = chain.pending_count();
 

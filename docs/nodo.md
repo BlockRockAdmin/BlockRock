@@ -171,6 +171,37 @@ Il tetto sul payload è una **regola di consenso**, non un controllo dell'API:
 vale anche per i blocchi che arrivano dai peer, altrimenti basterebbe entrare
 dalla porta P2P per aggirarlo.
 
+### Quando il nodo è pieno
+
+Niente viene scartato in silenzio: il mempool è l'unico ingresso, e ogni rifiuto
+torna al client con il motivo. Ma i rifiuti non sono tutti uguali, e la
+differenza è ciò che permette a un client di comportarsi bene.
+
+| Condizione | REST | gRPC | Riprovare? |
+| --- | --- | --- | --- |
+| Firma, nonce, duplicato, fondi | `400` | `InvalidArgument` | No: l'esito non cambia |
+| Payload oltre 4 KiB | `400` | `InvalidArgument` | No |
+| Mempool pieno | `429` + `Retry-After` | `ResourceExhausted` | **Sì**, dopo l'attesa |
+
+Il mempool pieno è l'unico caso transitorio: la transazione è valida, è il nodo
+a non avere spazio adesso. Dirlo con un `400` direbbe al client «la tua
+richiesta è sbagliata, non insistere» — l'opposto del segnale utile. Il `429`
+porta un `Retry-After` pari al tempo di blocco, cioè l'attesa entro cui il
+prossimo blocco libera il pool; su gRPC, `ResourceExhausted` è il codice che le
+retry policy riconoscono come ritentabile.
+
+Gli altri due casi sono invece definitivi, e vale la pena sapere perché:
+
+- **Fondi esauriti dalla coda.** Il disponibile è il saldo in catena meno quanto
+  il mittente ha già accodato. Dopo il blocco il saldo scende esattamente di
+  quella cifra, quindi il disponibile resta lo stesso: aspettare non aiuta.
+- **Nonce.** L'atteso è il nonce in catena più la coda del mittente. Dopo il
+  blocco la catena assorbe la coda e l'atteso non cambia.
+
+Un sensore impazzito, quindi, non riesce né a gonfiare la memoria del nodo — il
+tetto di 1 MiB lo ferma — né a spendere più di quanto ha, e in entrambi i casi
+riceve una risposta che gli dice cosa fare.
+
 ### Sequenze dallo stesso mittente
 
 Un mittente può accodare più transazioni di fila senza aspettare un blocco fra

@@ -257,3 +257,69 @@ async fn minting_is_refused_on_the_grpc_door_too() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("mints value"));
 }
+
+#[tokio::test]
+async fn a_saturated_node_answers_resource_exhausted_not_invalid_argument() {
+    let server = start().await;
+    let mut client = TransactionServiceClient::connect(server.endpoint.clone())
+        .await
+        .unwrap();
+
+    // Riempie il mempool con payload grossi, senza passare dall'API.
+    let filler = "x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES);
+    {
+        let mut chain = server.context.blockchain.lock().await;
+        let mut i = 0;
+        loop {
+            let name = format!("riempitivo{}", i);
+            let key = SigningKey::generate(&mut OsRng);
+            chain.add_public_key(&name, key.verifying_key());
+            let tx = Transaction::new_with_payload(
+                name.clone(),
+                name,
+                0,
+                0,
+                Some(filler.clone()),
+                &key,
+            );
+            if chain.queue_transaction(tx).is_err() {
+                break;
+            }
+            i += 1;
+            assert!(i < 10_000, "il mempool non si riempie");
+        }
+    }
+
+    let payload = Transaction::unsigned_with_payload(
+        "Alice".to_string(),
+        "Alice".to_string(),
+        0,
+        0,
+        Some(filler.clone()),
+    )
+    .signing_payload();
+
+    let status = client
+        .submit_transaction(SubmitTransactionRequest {
+            sender: "Alice".to_string(),
+            receiver: "Alice".to_string(),
+            amount: 0,
+            nonce: 0,
+            signature: hex::encode(server.alice.sign(&payload).to_bytes()),
+            payload: Some(filler),
+        })
+        .await
+        .expect_err("con il pool pieno la transazione non entra");
+
+    // ResourceExhausted, non InvalidArgument: e' il codice che le retry policy
+    // gRPC riconoscono come ritentabile. InvalidArgument direbbe "non
+    // riprovare", ed e' l'opposto.
+    assert_eq!(
+        status.code(),
+        tonic::Code::ResourceExhausted,
+        "codice sbagliato per un backoff: {} ({})",
+        status.code(),
+        status.message()
+    );
+    assert!(status.message().contains("mempool is full"));
+}
