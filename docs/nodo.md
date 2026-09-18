@@ -114,6 +114,32 @@ cicli e vitali. Due dettagli che contano in esercizio:
   registrato e il loop prosegue. La chiamata ha un timeout di 5 secondi, così
   un endpoint lento non trattiene il ciclo.
 
+## API gRPC
+
+Sulla porta **50051**, con reflection attiva (quindi `grpcurl` la esplora da
+sé). Rispecchia la REST, e non per simmetria: entrambe le porte passano per la
+stessa funzione di invio, così una regola come il divieto di conio vale su
+tutte e due senza doverla scrivere due volte.
+
+| Metodo | Cosa fa |
+| --- | --- |
+| `SubmitTransaction` | Invia un trasferimento o una lettura firmata |
+| `GetTransaction` | Una transazione per id |
+| `GetAccount` | Saldo, prossimo nonce e chiave pubblica |
+| `GetBalances` | Tutti i saldi |
+| `GetBlocks` | La catena completa |
+
+```bash
+grpcurl -plaintext localhost:50051 list blockrock.TransactionService
+grpcurl -plaintext -d '{"name":"Alice"}' localhost:50051 \
+  blockrock.TransactionService/GetAccount
+```
+
+Il campo `payload` è `optional` nel proto proprio per distinguere una
+transazione senza dato da una con dato vuoto. Gli errori seguono la stessa
+divisione della REST: `InvalidArgument` quando la richiesta è malfatta — firma,
+nonce, fondi — e `Internal` quando è il nodo a non farcela.
+
 ## Consenso
 
 Proof of Authority vero: ogni blocco oltre al genesis porta una firma

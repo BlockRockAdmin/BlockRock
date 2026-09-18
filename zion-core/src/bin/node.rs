@@ -16,7 +16,7 @@ use tokio::{select, sync::mpsc, sync::oneshot, sync::Mutex};
 use tracing::{error, info};
 use zion_core::{
     api::{
-        grpc::start_grpc,
+        grpc::{start_grpc, GrpcContext},
         rest::{SensorReading, TronService},
     },
     config::Config,
@@ -131,6 +131,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut connected: HashSet<PeerId> = HashSet::new();
     let mut greeted: HashSet<PeerId> = HashSet::new();
 
+    // REST e gRPC servono lo stesso nodo e condividono gli stessi riferimenti.
+    let grpc_context = GrpcContext {
+        blockchain: Arc::clone(&blockchain),
+        identity: Arc::new(identity.clone()),
+        store: store.clone(),
+        announcer: block_tx.clone(),
+    };
+
     // Configura Rocket
     let rocket = server::build(ServerContext {
         blockchain: Arc::clone(&blockchain),
@@ -142,12 +150,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         block_announcer: block_tx,
     });
 
-
     // Avvia server gRPC. Il canale gli dice quando smettere di servire: senza
     // di esso il gRPC sopravviveva al resto del nodo.
     let port = 50051;
     let (grpc_shutdown_tx, grpc_shutdown_rx) = oneshot::channel::<()>();
-    let grpc_handle = tokio::spawn(start_grpc(Arc::clone(&blockchain), port, async move {
+    let grpc_handle = tokio::spawn(start_grpc(grpc_context, port, async move {
         let _ = grpc_shutdown_rx.await;
     }));
 

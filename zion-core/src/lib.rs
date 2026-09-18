@@ -3,6 +3,7 @@ pub mod api;
 pub mod network;
 pub mod config;
 pub mod identity;
+pub mod ledger;
 pub mod monitoring;
 pub mod server;
 pub mod storage;

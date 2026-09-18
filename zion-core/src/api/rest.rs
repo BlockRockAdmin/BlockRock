@@ -17,8 +17,9 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::identity::NodeIdentity;
+use crate::ledger::{self, SubmitError};
 use crate::monitoring::{MetabolicStatus, SharedMetabolicStatus};
-use crate::network::sync::{announcement_of, BlockAnnouncement};
+use crate::network::sync::BlockAnnouncement;
 use crate::storage::ChainStore;
 
 /// Blocks sealed by this node are handed to the P2P loop, which pushes them to
@@ -111,13 +112,6 @@ pub async fn submit_transaction(
     announcer: &State<BlockAnnouncer>,
 ) -> Result<Json<TransactionAccepted>, ApiFailure> {
     let submission = submission.into_inner();
-    if submission.sender == MINT_ACCOUNT {
-        return Err(bad_request(format!(
-            "'{}' mints value and cannot be used from the API",
-            MINT_ACCOUNT
-        )));
-    }
-
     let signature = decode_signature(&submission.signature)?;
     let transaction = Transaction::signed(
         submission.sender,
@@ -131,12 +125,8 @@ pub async fn submit_transaction(
     Ok(Json(TransactionAccepted { id, pending }))
 }
 
-/// Accoda la transazione al mempool e, se questo viene sigillato, persiste il
-/// blocco e lo annuncia ai peer. Ritorna quante transazioni erano in attesa.
-///
-/// Condiviso fra i trasferimenti e le letture ancorate: entrambi entrano in
-/// catena per la stessa strada, e una sola copia di questa sequenza significa
-/// una sola occasione di sbagliarla.
+/// Traduce l'esito dell'invio condiviso nei codici HTTP: una richiesta
+/// malfatta e' 400, un guasto del nodo e' 500.
 async fn queue_and_maybe_seal(
     transaction: Transaction,
     state: &State<Arc<Mutex<Blockchain>>>,
@@ -144,35 +134,11 @@ async fn queue_and_maybe_seal(
     store: &State<ChainStore>,
     announcer: &State<BlockAnnouncer>,
 ) -> Result<usize, ApiFailure> {
-    let mut blockchain = state.lock().await;
-    blockchain
-        .queue_transaction(transaction)
-        .map_err(bad_request)?;
-
-    let pending = blockchain.pending_count();
-
-    // Try to seal immediately if the mempool has enough transactions. This
-    // keeps latency low when traffic is bursty while still allowing batching.
-    let sealed = blockchain
-        .seal_mempool(&identity.name, &identity.signing_key)
-        .map_err(|e| failure(Status::InternalServerError, e))?;
-
-    if sealed.is_some() {
-        store.save(&blockchain).map_err(|error| {
-            failure(
-                Status::InternalServerError,
-                format!("block sealed but not persisted: {}", error),
-            )
-        })?;
-
-        if let Some(block) = blockchain.blocks.last() {
-            let announcement = announcement_of(&blockchain, block.clone());
-            drop(blockchain);
-            let _ = announcer.try_send(announcement);
-        }
+    match ledger::submit(transaction, state, identity, store, announcer).await {
+        Ok(queued) => Ok(queued.pending),
+        Err(SubmitError::Rejected(message)) => Err(bad_request(message)),
+        Err(SubmitError::Internal(message)) => Err(failure(Status::InternalServerError, message)),
     }
-
-    Ok(pending)
 }
 
 #[derive(Debug, Deserialize)]
@@ -372,13 +338,6 @@ pub async fn commit_sensor_reading(
     sensor_tx: &State<Sender<SensorReading>>,
 ) -> Result<Json<ReadingCommitted>, ApiFailure> {
     let reading = reading.into_inner();
-    if reading.sensor_id == MINT_ACCOUNT {
-        return Err(bad_request(format!(
-            "'{}' mints value and cannot be used from the API",
-            MINT_ACCOUNT
-        )));
-    }
-
     let signature = decode_signature(&reading.signature)?;
     // Mittente e destinatario coincidono e l'importo è zero: la transazione
     // esiste solo per portare il dato, non per spostare fondi.

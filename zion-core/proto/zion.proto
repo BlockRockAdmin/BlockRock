@@ -2,8 +2,14 @@ syntax = "proto3";
 
 package blockrock;
 
+// La superficie gRPC del nodo. Rispecchia l'API REST: le due porte servono lo
+// stesso nodo e passano per la stessa logica di invio.
 service TransactionService {
   rpc GetTransaction(TransactionRequest) returns (TransactionResponse) {}
+  rpc SubmitTransaction(SubmitTransactionRequest) returns (SubmitTransactionResponse) {}
+  rpc GetAccount(AccountRequest) returns (AccountResponse) {}
+  rpc GetBalances(BalancesRequest) returns (BalancesResponse) {}
+  rpc GetBlocks(BlocksRequest) returns (BlocksResponse) {}
 }
 
 message TransactionRequest {
@@ -15,4 +21,57 @@ message TransactionResponse {
   string sender = 2;
   string recipient = 3;
   uint64 amount = 4;
+  uint64 nonce = 5;
+  // Assente per un semplice trasferimento; valorizzato per una lettura
+  // ancorata. `optional` distingue "nessun payload" da un payload vuoto.
+  optional string payload = 6;
+}
+
+message SubmitTransactionRequest {
+  string sender = 1;
+  string receiver = 2;
+  uint64 amount = 3;
+  uint64 nonce = 4;
+  // Firma ed25519 in esadecimale sul payload canonico della transazione.
+  string signature = 5;
+  optional string payload = 6;
+}
+
+message SubmitTransactionResponse {
+  string id = 1;
+  // Transazioni in attesa nel mempool, questa compresa.
+  uint64 pending = 2;
+}
+
+message AccountRequest {
+  string name = 1;
+}
+
+message AccountResponse {
+  string name = 1;
+  uint64 balance = 2;
+  // Il nonce da usare per la prossima transazione di questo conto.
+  uint64 next_nonce = 3;
+  optional string public_key = 4;
+}
+
+message BalancesRequest {}
+
+message BalancesResponse {
+  map<string, uint64> balances = 1;
+}
+
+message BlocksRequest {}
+
+message BlocksResponse {
+  repeated BlockSummary blocks = 1;
+}
+
+message BlockSummary {
+  uint32 index = 1;
+  uint64 timestamp = 2;
+  string previous_hash = 3;
+  string hash = 4;
+  string authority = 5;
+  repeated TransactionResponse transactions = 6;
 }
