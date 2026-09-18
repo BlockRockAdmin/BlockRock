@@ -150,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Avvia server gRPC. Il canale gli dice quando smettere di servire: senza
     // di esso il gRPC sopravviveva al resto del nodo.
-    let port = 50051;
+    let port = config.grpc_port;
     let (grpc_shutdown_tx, grpc_shutdown_rx) = oneshot::channel::<()>();
     // Una copia resta qui per sigillare cio' che e' rimasto in attesa quando il
     // nodo si ferma.

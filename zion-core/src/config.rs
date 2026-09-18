@@ -10,6 +10,7 @@ use std::path::PathBuf;
 const DEFAULT_AUTHORITY_NAME: &str = "blockrock";
 const DEFAULT_CHAIN_PATH: &str = "data/chain.json";
 const DEFAULT_AUTHORITY_KEY_PATH: &str = "data/authority.key";
+const DEFAULT_GRPC_PORT: u16 = 50051;
 
 pub struct Config {
     pub trongrid_api_key: String,
@@ -25,6 +26,9 @@ pub struct Config {
     /// Endpoint HTTP a cui spedire le decisioni metaboliche. Assente = il
     /// monitoraggio si limita a pubblicarle su `/metabolism`.
     pub metabolic_webhook: Option<String>,
+    /// Porta del server gRPC. Configurabile perche' altrimenti due nodi sulla
+    /// stessa macchina non possono convivere.
+    pub grpc_port: u16,
 }
 
 impl Config {
@@ -45,6 +49,13 @@ impl Config {
                 .unwrap_or_else(|_| DEFAULT_AUTHORITY_NAME.to_string()),
             authority_key_path: path_or_default("AUTHORITY_KEY_PATH", DEFAULT_AUTHORITY_KEY_PATH),
             initial_authorities,
+            grpc_port: match env::var("GRPC_PORT") {
+                Ok(raw) => raw
+                    .trim()
+                    .parse()
+                    .map_err(|e| format!("GRPC_PORT is not a valid port: {}", e))?,
+                Err(_) => DEFAULT_GRPC_PORT,
+            },
             metabolic_webhook: env::var("METABOLIC_WEBHOOK")
                 .ok()
                 .map(|url| url.trim().to_string())

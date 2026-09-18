@@ -21,12 +21,16 @@ pub type Authorities = HashSet<String>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockAnnouncement {
     pub block: Block,
+    /// Chiavi dei mittenti delle transazioni contenute nel blocco: senza, un
+    /// peer non potrebbe verificare una firma di un conto che non ha mai visto.
     pub accounts: Accounts,
-    /// Authorities known to the announcing node. Merged so new nodes learn
-    /// the validator set without re-syncing the whole chain.
-    #[serde(default)]
-    pub authorities: Authorities,
 }
+
+// Nota: un annuncio NON trasporta il set di autorita'. Lo faceva, e permetteva
+// a chiunque di farsi promuovere: bastava allegare il proprio nome. Chi puo'
+// sigillare e' la garanzia centrale del Proof of Authority, e non puo' venire
+// da un messaggio non autenticato. Si impara solo adottando una catena intera,
+// che viene validata dal genesis.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainSnapshot {
@@ -73,7 +77,6 @@ pub fn announcement_of(chain: &Blockchain, block: Block) -> BlockAnnouncement {
     BlockAnnouncement {
         block,
         accounts: chain.public_keys.clone(),
-        authorities: chain.authorities.clone(),
     }
 }
 
@@ -84,7 +87,7 @@ pub fn apply_announcement(
     chain: &mut Blockchain,
     announcement: BlockAnnouncement,
 ) -> Result<BlockOutcome, ChainError> {
-    let BlockAnnouncement { block, accounts, authorities } = announcement;
+    let BlockAnnouncement { block, accounts } = announcement;
     let height = chain.blocks.len() as u32;
 
     if block.index < height {
@@ -103,10 +106,19 @@ pub fn apply_announcement(
         return Ok(BlockOutcome::OutOfOrder);
     }
 
-    merge_accounts(chain, accounts);
-    merge_authorities(chain, authorities);
-    chain.try_append_block(block)?;
-    Ok(BlockOutcome::Appended)
+    // Le chiavi servono a verificare le transazioni del blocco, quindi vanno
+    // fuse prima. Ma restano solo se il blocco passa: un blocco rifiutato non
+    // deve lasciare tracce, altrimenti basta mandarne uno non valido per
+    // insegnare al nodo qualunque associazione nome-chiave.
+    let keys_before = chain.public_keys.clone();
+    merge_block_accounts(chain, &block, accounts);
+    match chain.try_append_block(block) {
+        Ok(()) => Ok(BlockOutcome::Appended),
+        Err(error) => {
+            chain.public_keys = keys_before;
+            Err(error)
+        }
+    }
 }
 
 /// Adopts a peer's chain when it is longer and valid. Returns whether the
@@ -115,9 +127,37 @@ pub fn apply_snapshot(chain: &mut Blockchain, snapshot: ChainSnapshot) -> Result
     if snapshot.blocks.len() <= chain.blocks.len() {
         return Ok(false);
     }
+    // Stessa regola: quello che il peer ci fa imparare per convincerci resta
+    // solo se finiamo davvero per adottare la sua catena.
+    let keys_before = chain.public_keys.clone();
+    let authorities_before = chain.authorities.clone();
     merge_accounts(chain, snapshot.accounts);
     merge_authorities(chain, snapshot.authorities);
-    chain.try_adopt_chain(snapshot.blocks)
+    match chain.try_adopt_chain(snapshot.blocks) {
+        Ok(true) => Ok(true),
+        other => {
+            chain.public_keys = keys_before;
+            chain.authorities = authorities_before;
+            other
+        }
+    }
+}
+
+/// Impara solo le chiavi che servono a verificare *questo* blocco: quelle dei
+/// mittenti delle sue transazioni. Un annuncio pieno di conti di contorno non
+/// puo' cosi' occupare nomi che col blocco non c'entrano nulla.
+///
+/// La chiave di chi sigilla non si impara qui di proposito: un blocco firmato
+/// da un'autorita' che non conosciamo deve essere rifiutato, non accettato
+/// imparando la chiave dal blocco stesso.
+fn merge_block_accounts(chain: &mut Blockchain, block: &Block, accounts: Accounts) {
+    for transaction in &block.transactions {
+        if chain.public_key(&transaction.sender).is_none() {
+            if let Some(key) = accounts.get(&transaction.sender) {
+                chain.add_public_key(&transaction.sender, *key);
+            }
+        }
+    }
 }
 
 /// Learns account keys we do not have yet. An existing binding is never
