@@ -3,24 +3,52 @@ name: Notify Telegram on Push
 on:
   push:
     branches:
-      - main # Modifica con il tuo branch (es. master, dev)
+      - main
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - name: Send Telegram Message
+        env:
+          # Tutto ciò che arriva dall'evento passa dall'ambiente e non viene mai
+          # interpolato nel corpo dello script: un messaggio di commit è testo
+          # non fidato, e `${{ }}` dentro `run:` lo darebbe in pasto a bash.
+          # Backtick e $(...) in un commit diventerebbero comandi eseguiti sul
+          # runner con i secret a portata di mano.
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPO_NAME: ${{ github.repository }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          COMMIT_MESSAGE="${{ github.event.commits[0].message }}"
-          COMMIT_AUTHOR="${{ github.event.commits[0].author.name }}"
-          COMMIT_SHA="${{ github.sha }}"
-          REPO_NAME="${{ github.repository }}"
-          MESSAGE="Nuovo commit in *$REPO_NAME* by *$COMMIT_AUTHOR*:
-          *$COMMIT_MESSAGE*  
-          [Vedi commit](https://github.com/$REPO_NAME/commit/$COMMIT_SHA)"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MESSAGE" \
-            -d message_thread_id="3" \
-            -d parse_mode="Markdown"
+          set -euo pipefail
+
+          if [ -z "${TELEGRAM_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "::warning::TELEGRAM_TOKEN o TELEGRAM_CHAT_ID non configurati: notifica saltata"
+            exit 0
+          fi
+
+          TEXT=$(printf '%s\n%s\n\n%s' \
+            "Nuovo commit in ${REPO_NAME} by ${COMMIT_AUTHOR}:" \
+            "${COMMIT_MESSAGE}" \
+            "https://github.com/${REPO_NAME}/commit/${COMMIT_SHA}")
+
+          # Niente parse_mode: un messaggio con * _ o backtick spaiati farebbe
+          # rifiutare la chiamata da Telegram. --data-urlencode tiene il testo
+          # fuori dalla riga di comando.
+          code=$(curl -sS -o /tmp/telegram.out -w '%{http_code}' \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "message_thread_id=3")
+
+          # Senza questo controllo `curl -s` esce 0 anche su un 404 e il
+          # workflow segna verde senza aver mandato niente.
+          if [ "${code}" != "200" ]; then
+            echo "Telegram ha risposto ${code}:"
+            cat /tmp/telegram.out
+            exit 1
+          fi
+          echo "Notifica inviata."
