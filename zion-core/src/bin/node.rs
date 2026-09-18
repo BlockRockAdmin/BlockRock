@@ -13,7 +13,7 @@ use std::time::Duration;
 #[cfg(unix)]
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::{select, sync::mpsc, sync::oneshot, sync::Mutex};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use zion_core::{
     ledger,
     api::{
@@ -63,7 +63,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // quando la catena viene creata per la prima volta.
     let store = ChainStore::new(config.chain_path.clone());
     let mut chain = store.load_or_create(&identity.name, config.initial_authorities.clone())?;
-    chain.register_authority(&identity.name, identity.signing_key.verifying_key());
+
+    // Registriamo la nostra chiave solo se la catena dice gia' che questo nome
+    // puo' sigillare: su una catena appena creata e' cosi' per costruzione, su
+    // una adottata dai peer lo e' solo se siamo davvero nel set. Registrarsi
+    // comunque, come si faceva prima, significava auto-eleggersi: il nodo
+    // sigillava un fork locale che la rete poi rifiutava, e i suoi client
+    // vedevano una catena che non esiste per nessun altro.
+    let is_authority = chain.authorities.contains(&identity.name);
+    if is_authority {
+        chain.register_authority(&identity.name, identity.signing_key.verifying_key());
+    } else {
+        warn!(
+            "'{}' non e' fra le autorita' di questa catena: il nodo valida e \
+             sincronizza, ma non sigilla blocchi",
+            identity.name
+        );
+    }
     chain
         .validate()
         .map_err(|e| format!("catena non valida su disco: {}", e))?;
@@ -99,7 +115,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let identity_for_tick = identity.clone();
     let store_for_tick = store.clone();
     let block_tx_for_tick = block_tx.clone();
-    let mut block_tick = if BLOCK_TIME_MS > 0 {
+    let mut block_tick = if is_authority && BLOCK_TIME_MS > 0 {
         Some(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(BLOCK_TIME_MS));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -274,7 +290,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Qui REST e gRPC hanno gia' chiuso, quindi non arriva piu' nulla e il
     // lotto e' completo. Il blocco non raggiunge i peer — il loop P2P e' finito
     // — ma lo riprenderanno col sync al prossimo avvio.
-    match ledger::seal_pending(
+    if is_authority {
+        match ledger::seal_pending(
         &shutdown_context.blockchain,
         &shutdown_context.identity,
         &shutdown_context.store,
@@ -282,9 +299,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )
     .await
     {
-        Ok(Some(index)) => info!("blocco {} sigillato durante l'arresto", index),
-        Ok(None) => { /* niente in attesa */ }
-        Err(e) => error!("transazioni in attesa non salvate durante l'arresto: {}", e),
+            Ok(Some(index)) => info!("blocco {} sigillato durante l'arresto", index),
+            Ok(None) => { /* niente in attesa */ }
+            Err(e) => error!("transazioni in attesa non salvate durante l'arresto: {}", e),
+        }
     }
 
     if let Some(message) = failure {
