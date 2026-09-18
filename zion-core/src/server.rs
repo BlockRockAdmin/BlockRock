@@ -7,7 +7,8 @@ use tokio::sync::Mutex;
 
 use crate::api::prometheus::init_metrics;
 use crate::api::rest::{
-    get_account, get_balances, get_blocks, get_modules, health, metabolism_status, post_sensor,
+    commit_sensor_reading, get_account, get_balances, get_blocks, get_modules, health,
+    metabolism_status, post_sensor,
     register_account, sensor_events, submit_transaction, tron_balance, BlockAnnouncer,
     SensorReading, TronService,
 };
@@ -51,6 +52,7 @@ pub fn build(context: ServerContext) -> Rocket<Build> {
                 metabolism_status,
                 get_modules,
                 post_sensor,
+                commit_sensor_reading,
                 sensor_events
             ],
         );

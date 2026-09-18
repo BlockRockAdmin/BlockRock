@@ -56,6 +56,37 @@ entrambi da zero con nomi diversi producono genesis diversi e non si
 sincronizzeranno. I nodi secondari devono adottare via sync la catena di chi
 l'ha creata.
 
+### Letture ancorate
+
+`POST /sensors` è la telemetria viva: la lettura arriva, viene ritrasmessa su
+`/sensors/stream` e sparisce. Nulla la trattiene.
+
+`POST /sensors/commit` è l'altra metà. La lettura diventa una transazione a
+importo **zero** dal sensore verso sé stesso: non muove valore, ma il dato
+resta in catena firmato, e chi lo rilegge può verificarlo con la chiave
+pubblica del sensore.
+
+Il sensore va prima registrato come un conto qualunque, con `POST /accounts`.
+Poi firma, esattamente come per un trasferimento, ma con il valore nel payload:
+
+```json
+POST /sensors/commit
+{
+  "sensor_id": "termometro",
+  "value": "22.5",
+  "nonce": 0,
+  "signature": "<hex>"
+}
+```
+
+Il valore viaggia come **stringa**, non come numero: la firma copre quei byte,
+e riformattare `22.5` in `22.50` — o un `1.0` in `1` — darebbe byte diversi e
+una firma invalida. Il nodo memorizza esattamente ciò che è stato firmato.
+
+Una lettura alterata dopo la firma non passa: l'id della transazione è un hash
+del contenuto, quindi la manomissione si vede prima ancora di controllare la
+firma.
+
 ## Consenso
 
 Proof of Authority vero: ogni blocco oltre al genesis porta una firma
@@ -82,7 +113,8 @@ Per questo l'API rifiuta qualsiasi transazione che lo indichi come mittente.
 | `POST` | `/accounts` | Registra la chiave pubblica di un conto |
 | `POST` | `/transactions` | Invia un trasferimento già firmato |
 | `GET` | `/health`, `/metabolism`, `/modules` | Stato del nodo |
-| `POST` | `/sensors`, `GET /sensors/stream` | Telemetria IoT |
+| `POST` | `/sensors`, `GET /sensors/stream` | Telemetria viva, effimera |
+| `POST` | `/sensors/commit` | Ancora una lettura **firmata** in catena |
 
 Il flusso completo:
 

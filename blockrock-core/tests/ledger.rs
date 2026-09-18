@@ -326,3 +326,114 @@ fn two_authorities_can_both_seal_blocks() {
     assert!(chain.authorities.contains("Bob"));
     assert!(chain.validate_chain());
 }
+
+// --- Letture ancorate: transazioni che portano un dato firmato -------------
+
+#[test]
+fn a_reading_is_signed_together_with_the_rest_of_the_transaction() {
+    let sensor = SigningKey::generate(&mut OsRng);
+    let reading = Transaction::new_with_payload(
+        "termometro".to_string(),
+        "termometro".to_string(),
+        0,
+        0,
+        Some("22.5".to_string()),
+        &sensor,
+    );
+
+    assert_eq!(reading.payload.as_deref(), Some("22.5"));
+    assert!(reading.verify(&sensor.verifying_key()));
+}
+
+#[test]
+fn a_reading_altered_after_signing_is_rejected() {
+    let sensor = SigningKey::generate(&mut OsRng);
+    let mut reading = Transaction::new_with_payload(
+        "termometro".to_string(),
+        "termometro".to_string(),
+        0,
+        0,
+        Some("22.5".to_string()),
+        &sensor,
+    );
+
+    // Chi intercetta la lettura la ritocca lasciando intatta la firma.
+    reading.payload = Some("35.0".to_string());
+
+    assert!(!reading.has_valid_id(), "l'id non copre piu' il contenuto");
+    assert!(!reading.verify(&sensor.verifying_key()));
+}
+
+#[test]
+fn an_empty_reading_is_not_the_same_as_no_reading() {
+    let none = Transaction::unsigned("a".to_string(), "b".to_string(), 1, 0);
+    let empty = Transaction::unsigned_with_payload(
+        "a".to_string(),
+        "b".to_string(),
+        1,
+        0,
+        Some(String::new()),
+    );
+    assert_ne!(
+        none.signing_payload(),
+        empty.signing_payload(),
+        "None e Some(\"\") devono produrre byte diversi"
+    );
+    assert_ne!(none.id, empty.id);
+}
+
+#[test]
+fn a_transaction_without_payload_signs_exactly_the_bytes_it_signed_before() {
+    // Retrocompatibilita': i byte firmati da una transazione senza payload non
+    // devono cambiare, altrimenti ogni catena gia' sigillata diventa invalida.
+    let plain = Transaction::unsigned("Alice".to_string(), "Bob".to_string(), 30, 7);
+    let bytes = plain.signing_payload();
+
+    let domain = b"blockrock.transaction.v1".len();
+    let expected = domain + (8 + "Alice".len()) + (8 + "Bob".len()) + 8 + 8;
+    assert_eq!(
+        bytes.len(),
+        expected,
+        "nessun byte in piu' deve essere aggiunto quando il payload e' assente"
+    );
+}
+
+#[test]
+fn an_anchored_reading_moves_no_value_but_stays_on_chain() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        ..
+    } = fixture();
+    let sensor = SigningKey::generate(&mut OsRng);
+    chain.add_public_key("termometro", sensor.verifying_key());
+
+    let before = chain.balance_of("termometro");
+
+    let reading = Transaction::new_with_payload(
+        "termometro".to_string(),
+        "termometro".to_string(),
+        0,
+        0,
+        Some("22.5".to_string()),
+        &sensor,
+    );
+    let id = reading.id.clone();
+    chain.queue_transaction(reading).unwrap();
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .expect("il blocco deve essere sigillato");
+
+    assert_eq!(
+        before,
+        chain.balance_of("termometro"),
+        "una lettura non deve muovere valore"
+    );
+
+    let stored = chain
+        .get_transaction(&id)
+        .expect("la lettura deve essere in catena");
+    assert_eq!(stored.payload.as_deref(), Some("22.5"));
+    assert!(chain.validate().is_ok());
+}

@@ -127,7 +127,23 @@ pub async fn submit_transaction(
         signature,
     );
     let id = transaction.id.clone();
+    let pending = queue_and_maybe_seal(transaction, state, identity, store, announcer).await?;
+    Ok(Json(TransactionAccepted { id, pending }))
+}
 
+/// Accoda la transazione al mempool e, se questo viene sigillato, persiste il
+/// blocco e lo annuncia ai peer. Ritorna quante transazioni erano in attesa.
+///
+/// Condiviso fra i trasferimenti e le letture ancorate: entrambi entrano in
+/// catena per la stessa strada, e una sola copia di questa sequenza significa
+/// una sola occasione di sbagliarla.
+async fn queue_and_maybe_seal(
+    transaction: Transaction,
+    state: &State<Arc<Mutex<Blockchain>>>,
+    identity: &State<NodeIdentity>,
+    store: &State<ChainStore>,
+    announcer: &State<BlockAnnouncer>,
+) -> Result<usize, ApiFailure> {
     let mut blockchain = state.lock().await;
     blockchain
         .queue_transaction(transaction)
@@ -156,7 +172,7 @@ pub async fn submit_transaction(
         }
     }
 
-    Ok(Json(TransactionAccepted { id, pending }))
+    Ok(pending)
 }
 
 #[derive(Debug, Deserialize)]
@@ -314,6 +330,79 @@ pub async fn post_sensor(
 ) -> &'static str {
     let _ = tx.send(reading.into_inner());
     "OK"
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CommitReading {
+    /// Conto del sensore. Deve avere una chiave pubblica registrata con
+    /// `POST /accounts`: una lettura non firmata da una chiave nota non entra
+    /// in catena, altrimenti chiunque potrebbe inventare misure.
+    pub sensor_id: String,
+    /// Il valore esattamente com'è stato firmato. Viaggia come stringa perché
+    /// la firma copre questi byte: riformattare un numero (`1.0` contro `1`, o
+    /// una precisione diversa) darebbe byte diversi e firma invalida.
+    pub value: String,
+    /// Prossimo nonce del sensore, da `GET /accounts/<sensor_id>`.
+    pub nonce: u64,
+    /// Firma ed25519 in hex sul payload canonico della transazione.
+    pub signature: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReadingCommitted {
+    /// Id della transazione che porta la lettura.
+    pub id: String,
+    pub pending: usize,
+}
+
+/// Ancora una lettura firmata alla catena.
+///
+/// `POST /sensors` è telemetria viva: arriva, viene ritrasmessa sullo stream e
+/// sparisce. Questo endpoint è l'altra metà: la lettura diventa una transazione
+/// a importo zero dal sensore verso sé stesso, quindi non muove valore ma resta
+/// in catena firmata e non alterabile. Chi la legge può verificarla con la
+/// chiave pubblica del sensore.
+#[post("/sensors/commit", format = "json", data = "<reading>")]
+pub async fn commit_sensor_reading(
+    reading: Json<CommitReading>,
+    state: &State<Arc<Mutex<Blockchain>>>,
+    identity: &State<NodeIdentity>,
+    store: &State<ChainStore>,
+    announcer: &State<BlockAnnouncer>,
+    sensor_tx: &State<Sender<SensorReading>>,
+) -> Result<Json<ReadingCommitted>, ApiFailure> {
+    let reading = reading.into_inner();
+    if reading.sensor_id == MINT_ACCOUNT {
+        return Err(bad_request(format!(
+            "'{}' mints value and cannot be used from the API",
+            MINT_ACCOUNT
+        )));
+    }
+
+    let signature = decode_signature(&reading.signature)?;
+    // Mittente e destinatario coincidono e l'importo è zero: la transazione
+    // esiste solo per portare il dato, non per spostare fondi.
+    let transaction = Transaction::signed_with_payload(
+        reading.sensor_id.clone(),
+        reading.sensor_id.clone(),
+        0,
+        reading.nonce,
+        Some(reading.value.clone()),
+        signature,
+    );
+    let id = transaction.id.clone();
+    let pending = queue_and_maybe_seal(transaction, state, identity, store, announcer).await?;
+
+    // Chi guarda lo stream vede anche le letture ancorate, purché siano
+    // numeriche: lo stream trasporta un f64, non una stringa qualunque.
+    if let Ok(value) = reading.value.parse::<f64>() {
+        let _ = sensor_tx.send(SensorReading {
+            sensor_id: reading.sensor_id,
+            value,
+        });
+    }
+
+    Ok(Json(ReadingCommitted { id, pending }))
 }
 
 #[get("/sensors/stream")]

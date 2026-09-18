@@ -237,3 +237,122 @@ async fn an_unknown_account_is_reported_as_missing() {
     let response = node.client.get("/accounts/Nobody").dispatch().await;
     assert_eq!(response.status(), Status::NotFound);
 }
+
+// --- Letture ancorate ------------------------------------------------------
+
+/// Firma una lettura esattamente come deve farlo un sensore: la transazione è
+/// da lui verso sé stesso, importo zero, e il valore viaggia nel payload.
+fn sign_reading(key: &SigningKey, sensor_id: &str, value: &str, nonce: u64) -> String {
+    let payload = Transaction::unsigned_with_payload(
+        sensor_id.to_string(),
+        sensor_id.to_string(),
+        0,
+        nonce,
+        Some(value.to_string()),
+    )
+    .signing_payload();
+    hex::encode(key.sign(&payload).to_bytes())
+}
+
+async fn commit_reading(client: &Client, body: Value) -> (Status, Value) {
+    let response = client
+        .post("/sensors/commit")
+        .header(ContentType::JSON)
+        .body(body.to_string())
+        .dispatch()
+        .await;
+    let status = response.status();
+    let body: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+    (status, body)
+}
+
+#[rocket::async_test]
+async fn a_signed_reading_is_anchored_and_survives_a_restart() {
+    let node = start_node().await;
+    let sensor = SigningKey::generate(&mut OsRng);
+    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+
+    let (status, accepted) = commit_reading(
+        &node.client,
+        json!({
+            "sensor_id": "termometro",
+            "value": "22.5",
+            "nonce": 0,
+            "signature": sign_reading(&sensor, "termometro", "22.5", 0),
+        }),
+    )
+    .await;
+    assert_eq!(status, Status::Ok);
+    let id = accepted["id"].as_str().unwrap().to_string();
+
+    // La lettura sopravvive a un riavvio, perche' e' in catena su disco.
+    let reloaded = Blockchain::load_from_file(node.store.path()).unwrap();
+    let stored = reloaded
+        .get_transaction(&id)
+        .expect("la lettura deve essere in catena dopo il riavvio");
+    assert_eq!(stored.payload.as_deref(), Some("22.5"));
+    assert_eq!(stored.amount, 0, "una lettura non muove valore");
+}
+
+#[rocket::async_test]
+async fn a_reading_signed_over_a_different_value_is_refused() {
+    let node = start_node().await;
+    let sensor = SigningKey::generate(&mut OsRng);
+    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+
+    // Il sensore firma 22.5, ma sulla rete viaggia 35.0.
+    let (status, _) = commit_reading(
+        &node.client,
+        json!({
+            "sensor_id": "termometro",
+            "value": "35.0",
+            "nonce": 0,
+            "signature": sign_reading(&sensor, "termometro", "22.5", 0),
+        }),
+    )
+    .await;
+    assert_eq!(status, Status::BadRequest);
+}
+
+#[rocket::async_test]
+async fn a_reading_from_an_unregistered_sensor_is_refused() {
+    let node = start_node().await;
+    let sconosciuto = SigningKey::generate(&mut OsRng);
+
+    let (status, _) = commit_reading(
+        &node.client,
+        json!({
+            "sensor_id": "intruso",
+            "value": "22.5",
+            "nonce": 0,
+            "signature": sign_reading(&sconosciuto, "intruso", "22.5", 0),
+        }),
+    )
+    .await;
+    assert_eq!(
+        status,
+        Status::BadRequest,
+        "senza chiave pubblica registrata la lettura non entra"
+    );
+}
+
+#[rocket::async_test]
+async fn a_replayed_reading_is_refused() {
+    let node = start_node().await;
+    let sensor = SigningKey::generate(&mut OsRng);
+    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+
+    let body = json!({
+        "sensor_id": "termometro",
+        "value": "22.5",
+        "nonce": 0,
+        "signature": sign_reading(&sensor, "termometro", "22.5", 0),
+    });
+
+    let (first, _) = commit_reading(&node.client, body.clone()).await;
+    assert_eq!(first, Status::Ok);
+
+    // Stesso nonce: e' un replay.
+    let (second, _) = commit_reading(&node.client, body).await;
+    assert_eq!(second, Status::BadRequest);
+}
