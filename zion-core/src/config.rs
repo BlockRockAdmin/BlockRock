@@ -22,6 +22,9 @@ pub struct Config {
     /// Additional authorities to bootstrap at genesis, as "name:pubkey_hex"
     /// pairs. The local authority is always included automatically.
     pub initial_authorities: HashMap<String, VerifyingKey>,
+    /// Endpoint HTTP a cui spedire le decisioni metaboliche. Assente = il
+    /// monitoraggio si limita a pubblicarle su `/metabolism`.
+    pub metabolic_webhook: Option<String>,
 }
 
 impl Config {
@@ -42,6 +45,10 @@ impl Config {
                 .unwrap_or_else(|_| DEFAULT_AUTHORITY_NAME.to_string()),
             authority_key_path: path_or_default("AUTHORITY_KEY_PATH", DEFAULT_AUTHORITY_KEY_PATH),
             initial_authorities,
+            metabolic_webhook: env::var("METABOLIC_WEBHOOK")
+                .ok()
+                .map(|url| url.trim().to_string())
+                .filter(|url| !url.is_empty()),
         })
     }
 }

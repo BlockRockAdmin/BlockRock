@@ -1,9 +1,12 @@
 //! Homeostatic monitoring for Zion Core.
 //!
-//! This module deliberately emits decisions only. An infrastructure actuator
-//! (Docker, a cloud provider, or a human approval workflow) can consume those
-//! decisions later; collecting metrics must never create billable resources.
+//! This module deliberately emits decisions only. It never scales anything
+//! itself: collecting metrics must never create billable resources. Quando
+//! `METABOLIC_WEBHOOK` e' configurato le decisioni vengono spedite a un
+//! endpoint HTTP, e cosa farne — scalare, avvisare, aprire un ticket — resta
+//! dall'altra parte. Il nodo non tiene credenziali cloud ne' tocca Docker.
 
+use reqwest::Client;
 use serde::Serialize;
 use std::fs;
 use std::io;
@@ -244,6 +247,68 @@ fn read_memory_usage() -> io::Result<f64> {
     }
 }
 
+/// Un endpoint lento non deve trattenere il loop di monitoraggio.
+const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Spedisce le decisioni metaboliche a un endpoint HTTP.
+///
+/// Il nodo continua a non azionare niente: manda la decisione e basta. Chi la
+/// riceve decide se scalare, avvisare o ignorarla, e il nodo non ha bisogno di
+/// credenziali cloud o dell'accesso al socket Docker per questo.
+pub struct MetabolicWebhook {
+    client: Client,
+    url: String,
+}
+
+impl MetabolicWebhook {
+    pub fn new(url: String) -> Self {
+        let client = Client::builder()
+            .timeout(WEBHOOK_TIMEOUT)
+            .build()
+            .unwrap_or_default();
+        Self { client, url }
+    }
+
+    /// Notifica la decisione. Non restituisce errore di proposito: un webhook
+    /// irraggiungibile e' un problema di chi ascolta, e non deve fermare il
+    /// monitoraggio del nodo.
+    async fn notify(&self, status: &MetabolicStatus) {
+        match self.client.post(&self.url).json(status).send().await {
+            Ok(response) if response.status().is_success() => tracing::info!(
+                url = %self.url,
+                action = ?status.action,
+                "decisione metabolica notificata"
+            ),
+            Ok(response) => tracing::warn!(
+                url = %self.url,
+                status = %response.status(),
+                "il webhook metabolico ha rifiutato la decisione"
+            ),
+            Err(error) => tracing::warn!(
+                url = %self.url,
+                %error,
+                "webhook metabolico non raggiungibile"
+            ),
+        }
+    }
+}
+
+/// Lascia passare solo i cambi di decisione: a un tick ogni 15 secondi,
+/// notificare ogni volta `Maintain` sarebbe rumore, e il segnale che conta e'
+/// il momento in cui la decisione cambia.
+#[derive(Default)]
+struct ChangeGate {
+    last: Option<MetabolicAction>,
+}
+
+impl ChangeGate {
+    fn should_notify(&mut self, action: MetabolicAction) -> bool {
+        let changed = self.last != Some(action);
+        self.last = Some(action);
+        changed
+    }
+}
+
 /// Run the autonomous monitoring loop and publish the latest decision. The
 /// caller owns the task handle and can abort it during graceful shutdown.
 pub async fn run_monitoring_loop<S>(
@@ -251,9 +316,17 @@ pub async fn run_monitoring_loop<S>(
     mut hypothalamus: Hypothalamus,
     status: SharedMetabolicStatus,
     interval: Duration,
+    webhook: Option<MetabolicWebhook>,
 ) where
     S: VitalsSource,
 {
+    let listener = if webhook.is_some() {
+        "notifico il webhook"
+    } else {
+        "nessun attuatore configurato"
+    };
+    let mut gate = ChangeGate::default();
+
     loop {
         match source.collect() {
             Ok(vitals) => {
@@ -261,17 +334,26 @@ pub async fn run_monitoring_loop<S>(
                 match next.action {
                     MetabolicAction::Hypertrophy => tracing::warn!(
                         stress_score = next.stress_score,
-                        "hypothalamus requests capacity increase; no actuator is configured"
+                        "l'ipotalamo chiede piu' capacita'; {}",
+                        listener
                     ),
                     MetabolicAction::Atrophy => tracing::info!(
                         stress_score = next.stress_score,
-                        "hypothalamus requests capacity reduction; no actuator is configured"
+                        "l'ipotalamo chiede meno capacita'; {}",
+                        listener
                     ),
                     MetabolicAction::Maintain => tracing::debug!(
                         stress_score = next.stress_score,
-                        "hypothalamus maintains current capacity"
+                        "l'ipotalamo mantiene la capacita' attuale"
                     ),
                 }
+
+                if let Some(webhook) = &webhook {
+                    if gate.should_notify(next.action) {
+                        webhook.notify(&next).await;
+                    }
+                }
+
                 *status.write().await = next;
             }
             Err(error) => tracing::warn!(%error, "unable to collect metabolic telemetry"),
@@ -283,6 +365,23 @@ pub async fn run_monitoring_loop<S>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_gate_lets_through_only_changes() {
+        let mut gate = ChangeGate::default();
+
+        // La prima decisione e' sempre una notizia.
+        assert!(gate.should_notify(MetabolicAction::Maintain));
+        // Ripeterla non lo e'.
+        assert!(!gate.should_notify(MetabolicAction::Maintain));
+        assert!(!gate.should_notify(MetabolicAction::Maintain));
+
+        assert!(gate.should_notify(MetabolicAction::Hypertrophy));
+        assert!(!gate.should_notify(MetabolicAction::Hypertrophy));
+
+        // Anche il rientro alla normalita' va notificato: dice "rientra".
+        assert!(gate.should_notify(MetabolicAction::Maintain));
+    }
 
     fn policy() -> HypothalamusConfig {
         HypothalamusConfig {

@@ -21,6 +21,7 @@ si riparte più da zero a ogni riavvio.
 | `AUTHORITY_NAME` | `blockrock` | Nome con cui il nodo sigilla. Entra nel genesis |
 | `AUTHORITY_KEY_PATH` | `data/authority.key` | Seed ed25519 con cui il nodo sigilla i blocchi |
 | `INITIAL_AUTHORITIES` | *(vuoto)* | Altre autorità alla genesi, `nome:pubkey_hex` separate da virgola |
+| `METABOLIC_WEBHOOK` | *(vuoto)* | Dove spedire le decisioni del monitoraggio |
 
 ## Autorità multiple
 
@@ -86,6 +87,32 @@ una firma invalida. Il nodo memorizza esattamente ciò che è stato firmato.
 Una lettura alterata dopo la firma non passa: l'id della transazione è un hash
 del contenuto, quindi la manomissione si vede prima ancora di controllare la
 firma.
+
+## Monitoraggio metabolico
+
+L'ipotalamo campiona CPU, memoria, latenza ed errori ogni 15 secondi e decide
+fra tre risposte: `hypertrophy` (serve più capacità), `atrophy` (ne avanza),
+`maintain`. Entrambe le decisioni di cambiamento arrivano solo dopo che lo
+stato si è confermato per più cicli: un picco isolato non muove niente, e un
+istante di quiete non toglie capacità che serve un momento dopo.
+
+Il nodo **non aziona nulla da sé**, per scelta: non ha credenziali cloud e non
+tocca il socket Docker. Le decisioni sono leggibili su `GET /metabolism`, e se
+imposti `METABOLIC_WEBHOOK` vengono anche spedite in POST JSON a quell'indirizzo.
+
+```bash
+METABOLIC_WEBHOOK=http://localhost:9000/metabolismo
+```
+
+Il corpo è lo stesso oggetto di `/metabolism`: azione, punteggio di stress,
+cicli e vitali. Due dettagli che contano in esercizio:
+
+- La notifica parte **solo quando la decisione cambia**. A un tick ogni 15
+  secondi, rimandare `maintain` all'infinito sarebbe rumore; il segnale utile è
+  il momento della transizione — rientro alla normalità compreso.
+- Un webhook irraggiungibile **non ferma il monitoraggio**: l'errore viene
+  registrato e il loop prosegue. La chiamata ha un timeout di 5 secondi, così
+  un endpoint lento non trattiene il ciclo.
 
 ## Consenso
 

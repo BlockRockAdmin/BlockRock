@@ -21,7 +21,10 @@ use zion_core::{
     },
     config::Config,
     identity::NodeIdentity,
-    monitoring::{run_monitoring_loop, shared_metabolic_status, Hypothalamus, ProcfsVitalsSource},
+    monitoring::{
+        run_monitoring_loop, shared_metabolic_status, Hypothalamus, MetabolicWebhook,
+        ProcfsVitalsSource,
+    },
     network::{
         p2p::{start_p2p_node, CustomEvent},
         service::handle_sync_event,
@@ -86,6 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Hypothalamus::default(),
         Arc::clone(&metabolic_status),
         Duration::from_secs(15),
+        config.metabolic_webhook.clone().map(MetabolicWebhook::new),
     ));
 
     // Block-time loop: periodically drains the mempool and seals a block.
