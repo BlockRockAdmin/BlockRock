@@ -18,8 +18,43 @@ si riparte più da zero a ogni riavvio.
 | Variabile | Default | A cosa serve |
 | --- | --- | --- |
 | `CHAIN_PATH` | `data/chain.json` | Dove vive la catena |
-| `AUTHORITY_NAME` | `blockrock` | Nome dell'autorità: è **di rete**, non del nodo |
+| `AUTHORITY_NAME` | `blockrock` | Nome con cui il nodo sigilla. Entra nel genesis |
 | `AUTHORITY_KEY_PATH` | `data/authority.key` | Seed ed25519 con cui il nodo sigilla i blocchi |
+| `INITIAL_AUTHORITIES` | *(vuoto)* | Altre autorità alla genesi, `nome:pubkey_hex` separate da virgola |
+
+## Autorità multiple
+
+Di default la rete ha una sola autorità e tutti i nodi condividono lo stesso
+`AUTHORITY_KEY_PATH`. Per una rete con più validatori, ogni nodo tiene la
+propria chiave e viene autorizzato dagli altri.
+
+Il set di autorità si fissa **alla genesi**, tramite `INITIAL_AUTHORITIES`:
+
+```bash
+# sul nodo che crea la catena
+INITIAL_AUTHORITIES=bob:d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+```
+
+La chiave pubblica di un nodo si legge dal nodo stesso:
+
+```bash
+curl -s localhost:8000/accounts/$AUTHORITY_NAME | jq -r .public_key
+```
+
+Da lì in poi il set viaggia da solo: i nodi se lo scambiano insieme alla catena
+durante il sync, e un'autorità viene accettata solo se la sua chiave pubblica è
+già nota — non si impara un nome e una chiave nello stesso passaggio.
+
+> **Attenzione.** `INITIAL_AUTHORITIES` viene letto **solo quando la catena
+> viene creata**. Se `data/chain.json` esiste già, il valore è ignorato in
+> silenzio: aggiungere un'autorità a un nodo già avviato non produce alcun
+> effetto e nessun avviso. Per cambiare il set su una catena esistente bisogna
+> ripartire dalla genesi.
+
+Nota che `AUTHORITY_NAME` entra nel blocco di genesis: due nodi che partono
+entrambi da zero con nomi diversi producono genesis diversi e non si
+sincronizzeranno. I nodi secondari devono adottare via sync la catena di chi
+l'ha creata.
 
 ## Consenso
 

@@ -13,7 +13,6 @@ use rocket::tokio::sync::broadcast::{error::RecvError, Sender};
 use rocket::{get, post, State};
 use serde_json::Value;
 use std::fmt;
-use std::fs;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -290,11 +289,16 @@ pub async fn metabolism_status(state: &State<SharedMetabolicStatus>) -> Json<Met
     Json(state.read().await.clone())
 }
 
+/// Il manifesto descrive i moduli compilati dentro questo binario, quindi
+/// viaggia con lui: incluso a compile time e risolto rispetto al crate, non
+/// alla working directory. Letto da disco falliva a seconda di come il nodo
+/// veniva avviato, e restituiva un 200 con dentro la stringa d'errore.
+const MODULES_MANIFEST: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/modules/blockchain/modules.yaml"));
+
 #[get("/modules", format = "json")]
 pub async fn get_modules() -> Json<String> {
-    let yaml = fs::read_to_string("modules/blockchain/modules.yaml")
-        .unwrap_or_else(|_| "Error: modules.yaml not found".to_string());
-    Json(yaml)
+    Json(MODULES_MANIFEST.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
