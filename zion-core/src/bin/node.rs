@@ -15,6 +15,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::{select, sync::mpsc, sync::oneshot, sync::Mutex};
 use tracing::{error, info};
 use zion_core::{
+    ledger,
     api::{
         grpc::{start_grpc, GrpcContext},
         rest::{SensorReading, TronService},
@@ -28,7 +29,7 @@ use zion_core::{
     network::{
         p2p::{start_p2p_node, CustomEvent},
         service::handle_sync_event,
-        sync::{announcement_of, BlockAnnouncement, SyncRequest},
+        sync::{BlockAnnouncement, SyncRequest},
     },
     server::{self, ServerContext},
     storage::ChainStore,
@@ -104,19 +105,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
-                let mut chain = blockchain_for_tick.lock().await;
-                match chain.seal_mempool(&identity_for_tick.name, &identity_for_tick.signing_key) {
-                    Ok(Some(index)) => {
-                        info!("blocco {} sigillato dal tick periodico", index);
-                        if let Err(e) = store_for_tick.save(&chain) {
-                            error!("salvataggio catena fallito dopo tick: {}", e);
-                        }
-                        if let Some(block) = chain.blocks.last() {
-                            let announcement = announcement_of(&chain, block.clone());
-                            drop(chain);
-                            let _ = block_tx_for_tick.try_send(announcement);
-                        }
-                    }
+                // Stessa sequenza dell'invio: sigilla, persiste, annuncia.
+                match ledger::seal_pending(
+                    &blockchain_for_tick,
+                    &identity_for_tick,
+                    &store_for_tick,
+                    &block_tx_for_tick,
+                )
+                .await
+                {
+                    Ok(Some(index)) => info!("blocco {} sigillato dal tick periodico", index),
                     Ok(None) => { /* mempool vuoto, niente da sigillare */ }
                     Err(e) => error!("tick periodico fallito: {}", e),
                 }

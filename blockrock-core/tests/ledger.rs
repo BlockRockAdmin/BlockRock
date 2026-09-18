@@ -437,3 +437,242 @@ fn an_anchored_reading_moves_no_value_but_stays_on_chain() {
     assert_eq!(stored.payload.as_deref(), Some("22.5"));
     assert!(chain.validate().is_ok());
 }
+
+// --- Batching: piu' transazioni in un blocco solo ---------------------------
+
+#[test]
+fn many_transactions_share_a_single_block() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        ..
+    } = fixture();
+
+    // Dieci mittenti diversi, ognuno con la sua chiave e il suo saldo.
+    let mut senders = Vec::new();
+    for i in 0..10 {
+        let name = format!("sensore{}", i);
+        let key = SigningKey::generate(&mut OsRng);
+        chain.add_public_key(&name, key.verifying_key());
+        senders.push((name, key));
+    }
+
+    for (name, key) in &senders {
+        let reading = Transaction::new_with_payload(
+            name.clone(),
+            name.clone(),
+            0,
+            0,
+            Some("22.5".to_string()),
+            key,
+        );
+        chain.queue_transaction(reading).unwrap();
+    }
+
+    assert_eq!(chain.pending_count(), 10, "tutte in attesa, nessuna sigillata");
+    assert!(
+        !chain.is_worth_sealing(),
+        "dieci letture non bastano a riempire un lotto"
+    );
+
+    let blocks_before = chain.blocks.len();
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .expect("il tick deve chiudere il blocco");
+
+    assert_eq!(
+        chain.blocks.len(),
+        blocks_before + 1,
+        "un blocco solo, non dieci"
+    );
+    assert_eq!(chain.blocks.last().unwrap().transactions.len(), 10);
+    assert_eq!(chain.pending_count(), 0);
+    assert_eq!(chain.pending_weight(), 0, "il peso segue il contenuto");
+    assert!(chain.validate().is_ok());
+}
+
+#[test]
+fn a_full_batch_asks_to_be_sealed() {
+    let Fixture { mut chain, .. } = fixture();
+
+    let mut queued = 0;
+    while !chain.is_worth_sealing() {
+        let name = format!("sensore{}", queued);
+        let key = SigningKey::generate(&mut OsRng);
+        chain.add_public_key(&name, key.verifying_key());
+        // Payload al massimo consentito, per riempire in fretta.
+        let reading = Transaction::new_with_payload(
+            name.clone(),
+            name,
+            0,
+            0,
+            Some("x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES)),
+            &key,
+        );
+        chain.queue_transaction(reading).unwrap();
+        queued += 1;
+        assert!(queued < 1000, "la soglia non viene mai raggiunta");
+    }
+
+    assert!(chain.pending_weight() >= blockrock_core::mempool::SEAL_THRESHOLD_BYTES);
+}
+
+// --- I due tetti che la soglia rende necessari ------------------------------
+
+#[test]
+fn a_payload_over_the_limit_never_reaches_the_mempool() {
+    let Fixture { mut chain, .. } = fixture();
+    let key = SigningKey::generate(&mut OsRng);
+    chain.add_public_key("verboso", key.verifying_key());
+
+    let too_big = Transaction::new_with_payload(
+        "verboso".to_string(),
+        "verboso".to_string(),
+        0,
+        0,
+        Some("x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES + 1)),
+        &key,
+    );
+
+    match chain.queue_transaction(too_big) {
+        Err(ChainError::PayloadTooLarge { size, max, .. }) => {
+            assert_eq!(size, max + 1);
+        }
+        other => panic!("atteso PayloadTooLarge, ottenuto {:?}", other),
+    }
+}
+
+#[test]
+fn a_block_from_a_peer_cannot_smuggle_an_oversized_payload() {
+    // Il tetto e' una regola di consenso: un peer che ci manda un blocco gia'
+    // sigillato non deve poter aggirare il controllo dell'API.
+    let Fixture {
+        mut chain,
+        authority_key,
+        ..
+    } = fixture();
+    let key = SigningKey::generate(&mut OsRng);
+    chain.add_public_key("verboso", key.verifying_key());
+
+    let too_big = Transaction::new_with_payload(
+        "verboso".to_string(),
+        "verboso".to_string(),
+        0,
+        0,
+        Some("x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES + 1)),
+        &key,
+    );
+
+    let result = chain.add_block(vec![too_big], "Node1", &authority_key);
+    assert!(
+        matches!(result, Err(ChainError::PayloadTooLarge { .. })),
+        "la validazione della catena deve rifiutarlo, non solo l'API: {:?}",
+        result
+    );
+}
+
+#[test]
+fn the_mempool_refuses_more_than_it_can_hold() {
+    let Fixture { mut chain, .. } = fixture();
+    let filler = "x".repeat(blockrock_core::transaction::MAX_PAYLOAD_BYTES);
+
+    let mut queued = 0;
+    let rejection = loop {
+        let name = format!("sensore{}", queued);
+        let key = SigningKey::generate(&mut OsRng);
+        chain.add_public_key(&name, key.verifying_key());
+        let reading = Transaction::new_with_payload(
+            name.clone(),
+            name,
+            0,
+            0,
+            Some(filler.clone()),
+            &key,
+        );
+        match chain.queue_transaction(reading) {
+            Ok(_) => queued += 1,
+            Err(error) => break error,
+        }
+        assert!(queued < 10_000, "il mempool non si riempie mai");
+    };
+
+    assert!(
+        matches!(rejection, ChainError::MempoolFull { .. }),
+        "atteso MempoolFull, ottenuto {:?}",
+        rejection
+    );
+    assert!(
+        chain.pending_weight() <= blockrock_core::mempool::MAX_MEMPOOL_BYTES,
+        "il pool non deve superare il proprio tetto"
+    );
+}
+
+#[test]
+fn one_sender_can_queue_a_sequence_in_the_same_block() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+
+    // Tre trasferimenti di fila, senza aspettare un blocco fra l'uno e
+    // l'altro: i nonce proseguono contando anche la coda.
+    for nonce in 0..3 {
+        let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, nonce, &alice_key);
+        chain
+            .queue_transaction(tx)
+            .unwrap_or_else(|e| panic!("nonce {} rifiutato: {}", nonce, e));
+    }
+    assert_eq!(chain.pending_count(), 3);
+
+    chain.seal_mempool("Node1", &authority_key).unwrap().unwrap();
+
+    assert_eq!(chain.blocks.last().unwrap().transactions.len(), 3);
+    assert_eq!(chain.balance_of("Alice"), 70);
+    assert_eq!(chain.balance_of("Bob"), 80);
+    assert_eq!(chain.next_nonce("Alice"), 3);
+    assert!(chain.validate().is_ok());
+}
+
+#[test]
+fn a_queued_sequence_still_cannot_overspend() {
+    let Fixture {
+        mut chain,
+        alice_key,
+        ..
+    } = fixture();
+
+    // Alice ha 100. Due da 60 in coda sono 120: il secondo non deve passare,
+    // anche se preso da solo sarebbe coperto dal saldo in catena.
+    let first = Transaction::new("Alice".to_string(), "Bob".to_string(), 60, 0, &alice_key);
+    chain.queue_transaction(first).unwrap();
+
+    let second = Transaction::new("Alice".to_string(), "Bob".to_string(), 60, 1, &alice_key);
+    assert!(
+        matches!(
+            chain.queue_transaction(second),
+            Err(ChainError::InsufficientFunds { .. })
+        ),
+        "la coda dello stesso mittente deve contare nei fondi disponibili"
+    );
+}
+
+#[test]
+fn a_gap_in_the_sequence_is_still_refused() {
+    let Fixture {
+        mut chain,
+        alice_key,
+        ..
+    } = fixture();
+
+    let first = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
+    chain.queue_transaction(first).unwrap();
+
+    // Salta il nonce 1: la sequenza deve restare contigua.
+    let skipped = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 2, &alice_key);
+    assert!(matches!(
+        chain.queue_transaction(skipped),
+        Err(ChainError::InvalidNonce { expected: 1, found: 2, .. })
+    ));
+}

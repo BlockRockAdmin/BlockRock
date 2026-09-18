@@ -140,6 +140,52 @@ transazione senza dato da una con dato vuoto. Gli errori seguono la stessa
 divisione della REST: `InvalidArgument` quando la richiesta è malfatta — firma,
 nonce, fondi — e `Internal` quando è il nodo a non farcela.
 
+## Mempool e formazione dei blocchi
+
+Una transazione accettata **non** viene sigillata subito: entra nel mempool e
+aspetta. I blocchi si formano in due modi:
+
+- **Il tick periodico**, ogni 5 secondi, svuota il mempool in un blocco.
+- **La soglia**: se il lotto in attesa supera i 64 KiB, l'invio sigilla
+  all'istante senza aspettare il tick, così una raffica non paga la latenza.
+
+Prima la sigillatura avveniva a *ogni* invio, quindi ogni transazione otteneva
+un blocco tutto suo e il tick trovava sempre il mempool vuoto: il batching non
+succedeva mai.
+
+La soglia è in **byte**, non in numero di transazioni, perché da quando esiste
+il payload le transazioni non hanno più dimensione uniforme: contarle
+misurerebbe la cosa sbagliata.
+
+### I due tetti
+
+Accumulare invece di sigillare subito rende necessari due limiti che prima non
+servivano, perché il mempool non conteneva mai più di un elemento:
+
+| Limite | Valore | Perché |
+| --- | --- | --- |
+| Payload per transazione | 4 KiB | Nessun budget complessivo regge un singolo elemento più grande del budget |
+| Mempool | 1 MiB | Accumulare senza tetto è memoria illimitata offerta a chi sa firmare |
+
+Il tetto sul payload è una **regola di consenso**, non un controllo dell'API:
+vale anche per i blocchi che arrivano dai peer, altrimenti basterebbe entrare
+dalla porta P2P per aggirarlo.
+
+### Sequenze dallo stesso mittente
+
+Un mittente può accodare più transazioni di fila senza aspettare un blocco fra
+l'una e l'altra: i nonce proseguono contando anche ciò che è già in coda, e i
+fondi disponibili sono il saldo in catena meno quanto è già accodato. Una
+sequenza con un buco resta rifiutata.
+
+Per vederlo funzionare:
+
+```bash
+cargo run --example sensor_client
+```
+
+Firma cinque letture di fila e verifica che producano un blocco solo.
+
 ## Consenso
 
 Proof of Authority vero: ogni blocco oltre al genesis porta una firma

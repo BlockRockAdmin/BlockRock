@@ -12,6 +12,7 @@ use tempfile::TempDir;
 use tokio::sync::{mpsc, Mutex};
 use zion_core::api::rest::{SensorReading, TronService};
 use zion_core::identity::NodeIdentity;
+use zion_core::ledger;
 use zion_core::monitoring::shared_metabolic_status;
 use zion_core::network::sync::BlockAnnouncement;
 use zion_core::server::{self, ServerContext};
@@ -22,7 +23,26 @@ struct TestNode {
     store: ChainStore,
     /// What the node would push to its peers.
     announcements: mpsc::Receiver<BlockAnnouncement>,
+    /// Quanto serve per chiudere un blocco a mano: nei test non gira il tick
+    /// periodico, e dalla soglia in poi un invio da solo non sigilla piu'.
+    blockchain: Arc<Mutex<Blockchain>>,
+    identity: Arc<NodeIdentity>,
+    announcer: mpsc::Sender<BlockAnnouncement>,
     _dir: TempDir,
+}
+
+impl TestNode {
+    /// Chiude un blocco esattamente come farebbe il tick del nodo.
+    async fn seal(&self) {
+        ledger::seal_pending(
+            &self.blockchain,
+            &self.identity,
+            &self.store,
+            &self.announcer,
+        )
+        .await
+        .expect("la sigillatura non deve fallire");
+    }
 }
 
 async fn start_node() -> TestNode {
@@ -38,20 +58,25 @@ async fn start_node() -> TestNode {
 
     let (sensor_tx, _sensor_rx) = broadcast::channel::<SensorReading>(8);
     let (block_announcer, announcements) = mpsc::channel::<BlockAnnouncement>(8);
+    let blockchain = Arc::new(Mutex::new(chain));
+    let identity = Arc::new(identity);
     let rocket = server::build(ServerContext {
-        blockchain: Arc::new(Mutex::new(chain)),
-        identity,
+        blockchain: Arc::clone(&blockchain),
+        identity: (*identity).clone(),
         store: store.clone(),
         sensor_tx,
         metabolic_status: shared_metabolic_status(),
         tron_service: TronService::new("test-key".to_string(), "test-address".to_string()),
-        block_announcer,
+        block_announcer: block_announcer.clone(),
     });
 
     TestNode {
         client: Client::tracked(rocket).await.unwrap(),
         store,
         announcements,
+        blockchain,
+        identity,
+        announcer: block_announcer,
         _dir: dir,
     }
 }
@@ -122,9 +147,17 @@ async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     )
     .await;
     assert_eq!(status, Status::Ok);
-    // After mempool: response carries `pending` count, not `block_index`.
-    // The transaction is sealed eagerly when the mempool has entries.
-    assert!(accepted["pending"].as_u64().is_some());
+    // La transazione e' accettata ma non ancora sigillata: sotto la soglia
+    // resta nel mempool finche' non passa il tick.
+    assert_eq!(accepted["pending"].as_u64().unwrap(), 1);
+    let before_tick = Blockchain::load_from_file(node.store.path()).unwrap();
+    assert_eq!(
+        before_tick.blocks.len(),
+        1,
+        "prima del tick in catena c'e' solo il genesis"
+    );
+
+    node.seal().await;
 
     let balances: Value = serde_json::from_str(
         &node
@@ -172,8 +205,14 @@ async fn a_replayed_or_unaffordable_transfer_is_refused() {
     });
     assert_eq!(submit(&node.client, transfer.clone()).await.0, Status::Ok);
 
-    // Same signed bytes again: the nonce has been consumed.
+    // Gli stessi byte firmati di nuovo: ora e' un duplicato gia' in attesa nel
+    // mempool. Prima della soglia lo stesso invio falliva perche' il nonce era
+    // gia' stato consumato in catena: due strade diverse, stesso rifiuto.
     assert_eq!(submit(&node.client, transfer).await.0, Status::BadRequest);
+
+    // Sigillato il primo trasferimento, il nonce avanza e si puo' provare a
+    // spendere piu' di quanto resta.
+    node.seal().await;
 
     let (status, error) = submit(
         &node.client,
@@ -284,6 +323,8 @@ async fn a_signed_reading_is_anchored_and_survives_a_restart() {
     .await;
     assert_eq!(status, Status::Ok);
     let id = accepted["id"].as_str().unwrap().to_string();
+
+    node.seal().await;
 
     // La lettura sopravvive a un riavvio, perche' e' in catena su disco.
     let reloaded = Blockchain::load_from_file(node.store.path()).unwrap();

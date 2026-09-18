@@ -1,5 +1,5 @@
 use super::blockchain::ChainError;
-use super::transaction::{Amount, Transaction};
+use super::transaction::{Amount, Transaction, MAX_PAYLOAD_BYTES};
 use ed25519_dalek::VerifyingKey;
 use std::collections::HashMap;
 
@@ -7,17 +7,43 @@ use std::collections::HashMap;
 ///
 /// The mempool is **not** persisted: on restart pending transactions are lost,
 /// which is the expected behaviour for a best-effort submission layer.
+/// Byte di transazioni oltre i quali conviene sigillare subito invece di
+/// aspettare il prossimo tick. Con transazioni ordinarie sono qualche centinaio
+/// di elementi per blocco.
+pub const SEAL_THRESHOLD_BYTES: usize = 64 * 1024;
+
+/// Quanti byte il mempool accetta di tenere in attesa. Finche' ogni transazione
+/// veniva sigillata all'istante il pool non cresceva mai; ora che si accumula,
+/// senza questo tetto sarebbe memoria illimitata offerta a chiunque sappia
+/// firmare.
+pub const MAX_MEMPOOL_BYTES: usize = 1024 * 1024;
+
 #[derive(Debug, Clone, Default)]
 pub struct Mempool {
     /// Transactions indexed by their id so duplicates are rejected in O(1).
     pending: HashMap<String, Transaction>,
+    /// Somma dei pesi di `pending`, tenuta aggiornata per non doverla
+    /// ricalcolare a ogni invio.
+    bytes: usize,
 }
 
 impl Mempool {
     pub fn new() -> Self {
         Self {
             pending: HashMap::new(),
+            bytes: 0,
         }
+    }
+
+    /// Byte di transazioni attualmente in attesa.
+    pub fn weight(&self) -> usize {
+        self.bytes
+    }
+
+    /// `true` quando il lotto e' abbastanza pieno da valere un blocco subito,
+    /// senza aspettare il tick.
+    pub fn is_worth_sealing(&self) -> bool {
+        self.bytes >= SEAL_THRESHOLD_BYTES
     }
 
     /// Number of transactions currently waiting.
@@ -47,6 +73,17 @@ impl Mempool {
             return Err(ChainError::TamperedTransaction(transaction.id));
         }
 
+        // 1b. Il dato allegato deve stare nel limite: e' la stessa regola che
+        //     applica la validazione della catena, ma qui fallisce subito
+        //     invece di far scoprire il problema al momento di sigillare.
+        if !transaction.payload_within_limit() {
+            return Err(ChainError::PayloadTooLarge {
+                size: transaction.payload.as_ref().map_or(0, |data| data.len()),
+                id: transaction.id,
+                max: MAX_PAYLOAD_BYTES,
+            });
+        }
+
         // 2. Duplicate detection: already on chain or already in the pool.
         if tx_exists_on_chain {
             return Err(ChainError::DuplicateTransaction(transaction.id));
@@ -65,8 +102,19 @@ impl Mempool {
             return Err(ChainError::InvalidSignature(transaction.id));
         }
 
-        // 5. Nonce must be exactly the next expected one.
-        let expected_nonce = nonces.get(&transaction.sender).copied().unwrap_or(0);
+        // 5. Il nonce deve essere il prossimo della sequenza, contando anche
+        //    quelle gia' in attesa di questo mittente. Guardare solo la catena
+        //    limitava ogni mittente a una transazione per blocco: il controllo
+        //    sui fondi qui sotto somma da sempre gli importi gia' accodati
+        //    dello stesso mittente, quindi la coda per mittente era prevista —
+        //    era questo controllo a impedirla.
+        let queued_from_sender = self
+            .pending
+            .values()
+            .filter(|pending| pending.sender == transaction.sender)
+            .count() as u64;
+        let expected_nonce =
+            nonces.get(&transaction.sender).copied().unwrap_or(0) + queued_from_sender;
         if transaction.nonce != expected_nonce {
             return Err(ChainError::InvalidNonce {
                 sender: transaction.sender.clone(),
@@ -93,8 +141,20 @@ impl Mempool {
             });
         }
 
+        // 7. Il pool deve avere spazio. Ultimo controllo di proposito: una
+        //    transazione invalida va respinta per quello che e', non perche'
+        //    e' arrivata quando il pool era pieno.
+        let weight = transaction.weight();
+        if self.bytes + weight > MAX_MEMPOOL_BYTES {
+            return Err(ChainError::MempoolFull {
+                queued: self.bytes,
+                max: MAX_MEMPOOL_BYTES,
+            });
+        }
+
         let id = transaction.id.clone();
         self.pending.insert(id.clone(), transaction);
+        self.bytes += weight;
         Ok(id)
     }
 
@@ -102,6 +162,9 @@ impl Mempool {
     /// each sender so that they can be applied in order.
     pub fn drain(&mut self) -> Vec<Transaction> {
         let mut transactions: Vec<Transaction> = self.pending.drain().map(|(_, tx)| tx).collect();
+        // Il peso segue il contenuto: dimenticarlo qui farebbe credere al pool
+        // di essere pieno per sempre.
+        self.bytes = 0;
         // Sort by (sender, nonce) so that transactions from the same sender
         // are applied in the correct order within a block.
         transactions.sort_by(|a, b| {

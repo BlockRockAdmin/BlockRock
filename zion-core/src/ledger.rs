@@ -69,25 +69,53 @@ pub async fn submit(
 
     let pending = chain.pending_count();
 
-    // Sigilla subito quando c'e' qualcosa in attesa: tiene bassa la latenza
-    // quando il traffico arriva a raffiche, senza rinunciare al batching.
+    // Si sigilla subito solo quando il lotto e' gia' pieno: cosi' una raffica
+    // non aspetta il tick, ma il traffico normale si accumula e finisce in
+    // blocchi con piu' di una transazione dentro. Prima si sigillava a ogni
+    // invio, quindi ogni transazione otteneva un blocco tutto suo e il tick
+    // da 5 secondi trovava sempre il mempool vuoto.
+    let worth_sealing = chain.is_worth_sealing();
+    drop(chain);
+
+    if worth_sealing {
+        seal_pending(blockchain, identity, store, announcer).await?;
+    }
+
+    Ok(Queued { id, pending })
+}
+
+/// Sigilla tutto cio' che e' in attesa, persiste il blocco e lo annuncia.
+///
+/// E' quello che fa il tick periodico, e vive qui per due motivi: il tick e
+/// l'invio condividono la stessa sequenza di persistenza e annuncio, e finche'
+/// era inline dentro `node.rs` nessun test poteva chiudere un blocco senza
+/// reimplementarla.
+///
+/// Restituisce l'indice del blocco, o `None` se non c'era niente da sigillare.
+pub async fn seal_pending(
+    blockchain: &Arc<Mutex<Blockchain>>,
+    identity: &NodeIdentity,
+    store: &ChainStore,
+    announcer: &BlockAnnouncer,
+) -> Result<Option<u32>, SubmitError> {
+    let mut chain = blockchain.lock().await;
     let sealed = chain
         .seal_mempool(&identity.name, &identity.signing_key)
         .map_err(|e| SubmitError::Internal(e.to_string()))?;
 
-    if sealed.is_some() {
-        store.save(&chain).map_err(|error| {
-            SubmitError::Internal(format!("block sealed but not persisted: {}", error))
-        })?;
+    let Some(index) = sealed else {
+        return Ok(None);
+    };
 
-        if let Some(block) = chain.blocks.last() {
-            let announcement = announcement_of(&chain, block.clone());
-            drop(chain);
-            // Annunciare e' best effort: un canale pieno non deve far fallire
-            // una transazione che e' gia' in catena.
-            let _ = announcer.try_send(announcement);
-        }
+    store
+        .save(&chain)
+        .map_err(|error| SubmitError::Internal(format!("block sealed but not persisted: {}", error)))?;
+
+    if let Some(block) = chain.blocks.last() {
+        let announcement = announcement_of(&chain, block.clone());
+        drop(chain);
+        let _ = announcer.try_send(announcement);
     }
 
-    Ok(Queued { id, pending })
+    Ok(Some(index))
 }

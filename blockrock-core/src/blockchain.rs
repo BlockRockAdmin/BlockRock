@@ -1,6 +1,6 @@
 use super::block::Block;
 use super::mempool::Mempool;
-use super::transaction::{Amount, Transaction};
+use super::transaction::{Amount, Transaction, MAX_PAYLOAD_BYTES};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -45,6 +45,19 @@ pub enum ChainError {
         amount: Amount,
     },
     BalanceOverflow(String),
+    /// Il dato allegato supera [`MAX_PAYLOAD_BYTES`]. Una transazione entra in
+    /// catena per sempre: il tetto e' una regola di consenso, non una cortesia
+    /// dell'API, quindi vale anche per i blocchi che arrivano dai peer.
+    PayloadTooLarge {
+        id: String,
+        size: usize,
+        max: usize,
+    },
+    /// Il mempool ha gia' in attesa tutti i byte che e' disposto a tenere.
+    MempoolFull {
+        queued: usize,
+        max: usize,
+    },
 }
 
 impl fmt::Display for ChainError {
@@ -83,6 +96,16 @@ impl fmt::Display for ChainError {
                 f,
                 "'{}' expected nonce {}, found {}",
                 sender, expected, found
+            ),
+            ChainError::PayloadTooLarge { id, size, max } => write!(
+                f,
+                "transaction '{}' carries {} bytes of payload, more than the {} allowed",
+                id, size, max
+            ),
+            ChainError::MempoolFull { queued, max } => write!(
+                f,
+                "mempool is full: {} bytes queued, limit is {}",
+                queued, max
             ),
             ChainError::InsufficientFunds {
                 sender,
@@ -232,6 +255,18 @@ impl Blockchain {
     /// Returns the number of transactions currently waiting in the mempool.
     pub fn pending_count(&self) -> usize {
         self.mempool.len()
+    }
+
+    /// Byte di transazioni in attesa.
+    pub fn pending_weight(&self) -> usize {
+        self.mempool.weight()
+    }
+
+    /// `true` quando il mempool e' abbastanza pieno da valere un blocco subito.
+    /// Sotto questa soglia si lascia fare al tick periodico: e' li' che il
+    /// batching produce blocchi con piu' di una transazione dentro.
+    pub fn is_worth_sealing(&self) -> bool {
+        self.mempool.is_worth_sealing()
     }
 
     /// Drains the mempool and seals all pending transactions into a new block.
@@ -505,6 +540,13 @@ fn apply_transaction(
     }
     if !seen.insert(transaction.id.clone()) {
         return Err(ChainError::DuplicateTransaction(transaction.id.clone()));
+    }
+    if !transaction.payload_within_limit() {
+        return Err(ChainError::PayloadTooLarge {
+            id: transaction.id.clone(),
+            size: transaction.payload.as_ref().map_or(0, |data| data.len()),
+            max: MAX_PAYLOAD_BYTES,
+        });
     }
 
     if transaction.sender != MINT_ACCOUNT {

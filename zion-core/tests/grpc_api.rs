@@ -22,7 +22,24 @@ struct TestServer {
     endpoint: String,
     alice: SigningKey,
     _announcements: mpsc::Receiver<BlockAnnouncement>,
+    /// Nei test non gira il tick periodico: dalla soglia in poi un invio da
+    /// solo non sigilla piu', quindi il blocco lo chiudiamo a mano.
+    context: GrpcContext,
     _dir: TempDir,
+}
+
+impl TestServer {
+    /// Chiude un blocco esattamente come farebbe il tick del nodo.
+    async fn seal(&self) {
+        zion_core::ledger::seal_pending(
+            &self.context.blockchain,
+            &self.context.identity,
+            &self.context.store,
+            &self.context.announcer,
+        )
+        .await
+        .expect("la sigillatura non deve fallire");
+    }
 }
 
 /// Chiede al sistema una porta libera e la restituisce.
@@ -56,7 +73,7 @@ async fn start() -> TestServer {
         announcer,
     };
 
-    tokio::spawn(start_grpc(context, port, std::future::pending()));
+    tokio::spawn(start_grpc(context.clone(), port, std::future::pending()));
 
     let endpoint = format!("http://127.0.0.1:{}", port);
     // Attende che il server sia in ascolto.
@@ -71,6 +88,7 @@ async fn start() -> TestServer {
         endpoint,
         alice,
         _announcements,
+        context,
         _dir: dir,
     }
 }
@@ -101,6 +119,8 @@ async fn a_transfer_submitted_over_grpc_lands_on_chain() {
         .await
         .expect("il gRPC deve accettare il trasferimento")
         .into_inner();
+
+    server.seal().await;
 
     // Rileggibile dalla stessa porta.
     let found = client
@@ -175,6 +195,8 @@ async fn a_reading_anchored_over_grpc_keeps_its_payload() {
         .await
         .unwrap()
         .into_inner();
+
+    server.seal().await;
 
     let found = client
         .get_transaction(TransactionRequest { id: accepted.id })

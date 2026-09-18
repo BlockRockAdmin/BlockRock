@@ -13,6 +13,20 @@ const TRANSACTION_DOMAIN: &[u8] = b"blockrock.transaction.v1";
 /// over before payloads existed — le catene già sigillate restano valide.
 const PAYLOAD_TAG: u8 = 0x01;
 
+/// Tetto al dato che una singola transazione puo' portare.
+///
+/// Il payload entra in catena e ci resta per sempre, e viaggia in ogni
+/// messaggio P2P che annuncia il blocco. Senza questo limite una sola
+/// transazione potrebbe sfondare qualunque tetto sul blocco, perche' nessun
+/// budget complessivo puo' difendersi da un elemento piu' grande del budget.
+/// 4 KiB: una lettura di un sensore sta in decine di byte.
+pub const MAX_PAYLOAD_BYTES: usize = 4 * 1024;
+
+/// Byte di contorno che una transazione occupa oltre ai campi di lunghezza
+/// variabile: firma (64), importo e nonce (8 ciascuno), piu' il margine della
+/// serializzazione.
+const TRANSACTION_OVERHEAD: usize = 128;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transaction {
     /// Hash of the signed payload: derived from the content, never random.
@@ -166,6 +180,24 @@ impl Transaction {
                 self.nonce,
                 self.payload.as_deref(),
             )
+    }
+
+    /// Peso indicativo in byte: quanto questa transazione occupera' nel blocco
+    /// e nei messaggi verso i peer. Serve a decidere quando un lotto e' pieno,
+    /// quindi deve essere economico e crescere col contenuto, non esatto.
+    pub fn weight(&self) -> usize {
+        self.id.len()
+            + self.sender.len()
+            + self.receiver.len()
+            + self.payload.as_ref().map_or(0, |data| data.len())
+            + TRANSACTION_OVERHEAD
+    }
+
+    /// `true` se il payload sta nel limite. Un payload assente sta sempre.
+    pub fn payload_within_limit(&self) -> bool {
+        self.payload
+            .as_ref()
+            .is_none_or(|data| data.len() <= MAX_PAYLOAD_BYTES)
     }
 
     pub fn verify(&self, verifying_key: &VerifyingKey) -> bool {
