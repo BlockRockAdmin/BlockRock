@@ -152,6 +152,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // di esso il gRPC sopravviveva al resto del nodo.
     let port = 50051;
     let (grpc_shutdown_tx, grpc_shutdown_rx) = oneshot::channel::<()>();
+    // Una copia resta qui per sigillare cio' che e' rimasto in attesa quando il
+    // nodo si ferma.
+    let shutdown_context = grpc_context.clone();
     let grpc_handle = tokio::spawn(start_grpc(grpc_context, port, async move {
         let _ = grpc_shutdown_rx.await;
     }));
@@ -264,6 +267,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     metabolic_handle.abort();
     if let Some(handle) = block_tick.take() {
         handle.abort();
+    }
+
+    // Il mempool vive in memoria: quello che e' stato accettato ma non ancora
+    // sigillato sparirebbe col processo, e al client era stato risposto 200.
+    // Qui REST e gRPC hanno gia' chiuso, quindi non arriva piu' nulla e il
+    // lotto e' completo. Il blocco non raggiunge i peer — il loop P2P e' finito
+    // — ma lo riprenderanno col sync al prossimo avvio.
+    match ledger::seal_pending(
+        &shutdown_context.blockchain,
+        &shutdown_context.identity,
+        &shutdown_context.store,
+        &shutdown_context.announcer,
+    )
+    .await
+    {
+        Ok(Some(index)) => info!("blocco {} sigillato durante l'arresto", index),
+        Ok(None) => { /* niente in attesa */ }
+        Err(e) => error!("transazioni in attesa non salvate durante l'arresto: {}", e),
     }
 
     if let Some(message) = failure {
