@@ -8,9 +8,8 @@ use tokio::sync::Mutex;
 use crate::api::prometheus::init_metrics;
 use crate::api::rest::{
     commit_sensor_reading, get_account, get_balances, get_blocks, get_modules, health,
-    metabolism_status, post_sensor,
-    register_account, sensor_events, submit_transaction, tron_balance, BlockAnnouncer,
-    SensorReading, TronService,
+    metabolism_status, post_sensor, register_account, sensor_events, submit_transaction,
+    tron_balance, BlockAnnouncer, SensorReading, TronService,
 };
 use crate::identity::NodeIdentity;
 use crate::monitoring::SharedMetabolicStatus;

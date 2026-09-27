@@ -52,7 +52,9 @@ async fn start_node() -> TestNode {
         NodeIdentity::load_or_create("blockrock".to_string(), dir.path().join("authority.key"))
             .unwrap();
 
-    let mut chain = store.load_or_create(&identity.name, HashMap::new()).unwrap();
+    let mut chain = store
+        .load_or_create(&identity.name, HashMap::new())
+        .unwrap();
     chain.register_authority(&identity.name, identity.signing_key.verifying_key());
     store.save(&chain).unwrap();
 
@@ -82,8 +84,8 @@ async fn start_node() -> TestNode {
 }
 
 fn sign(key: &SigningKey, sender: &str, receiver: &str, amount: u64, nonce: u64) -> String {
-    let payload =
-        Transaction::unsigned(sender.to_string(), receiver.to_string(), amount, nonce).signing_payload();
+    let payload = Transaction::unsigned(sender.to_string(), receiver.to_string(), amount, nonce)
+        .signing_payload();
     hex::encode(key.sign(&payload).to_bytes())
 }
 
@@ -175,7 +177,10 @@ async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     assert!(balances.contains(&json!(["Bob", 80])));
 
     // The sealed block is handed to the P2P loop for the peers.
-    let announced = node.announcements.try_recv().expect("the block is announced");
+    let announced = node
+        .announcements
+        .try_recv()
+        .expect("the block is announced");
     assert_eq!(announced.block.index, 1);
     assert!(announced.accounts.contains_key("Alice"));
 
@@ -185,7 +190,10 @@ async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     assert!(reloaded.validate_chain());
     assert_eq!(reloaded.balance_of("Alice"), 70);
     assert_eq!(
-        reloaded.get_transaction(accepted["id"].as_str().unwrap()).unwrap().amount,
+        reloaded
+            .get_transaction(accepted["id"].as_str().unwrap())
+            .unwrap()
+            .amount,
         30
     );
 }
@@ -309,7 +317,10 @@ async fn commit_reading(client: &Client, body: Value) -> (Status, Value) {
 async fn a_signed_reading_is_anchored_and_survives_a_restart() {
     let node = start_node().await;
     let sensor = SigningKey::generate(&mut OsRng);
-    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+    assert_eq!(
+        register(&node.client, "termometro", &sensor).await,
+        Status::Ok
+    );
 
     let (status, accepted) = commit_reading(
         &node.client,
@@ -339,7 +350,10 @@ async fn a_signed_reading_is_anchored_and_survives_a_restart() {
 async fn a_reading_signed_over_a_different_value_is_refused() {
     let node = start_node().await;
     let sensor = SigningKey::generate(&mut OsRng);
-    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+    assert_eq!(
+        register(&node.client, "termometro", &sensor).await,
+        Status::Ok
+    );
 
     // Il sensore firma 22.5, ma sulla rete viaggia 35.0.
     let (status, _) = commit_reading(
@@ -381,7 +395,10 @@ async fn a_reading_from_an_unregistered_sensor_is_refused() {
 async fn a_replayed_reading_is_refused() {
     let node = start_node().await;
     let sensor = SigningKey::generate(&mut OsRng);
-    assert_eq!(register(&node.client, "termometro", &sensor).await, Status::Ok);
+    assert_eq!(
+        register(&node.client, "termometro", &sensor).await,
+        Status::Ok
+    );
 
     let body = json!({
         "sensor_id": "termometro",
@@ -410,14 +427,8 @@ async fn fill_mempool(node: &TestNode) {
         let name = format!("riempitivo{}", i);
         let key = SigningKey::generate(&mut OsRng);
         chain.add_public_key(&name, key.verifying_key());
-        let tx = Transaction::new_with_payload(
-            name.clone(),
-            name,
-            0,
-            0,
-            Some(filler.clone()),
-            &key,
-        );
+        let tx =
+            Transaction::new_with_payload(name.clone(), name, 0, 0, Some(filler.clone()), &key);
         if chain.queue_transaction(tx).is_err() {
             break;
         }

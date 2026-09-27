@@ -50,10 +50,7 @@ impl MyBehaviour {
     pub fn new(local_peer_id: PeerId) -> Result<Self, Box<dyn Error>> {
         let mdns = Mdns::new(MdnsConfig::default(), local_peer_id)?;
         let sync = JsonBehaviour::new(
-            [(
-                StreamProtocol::new(SYNC_PROTOCOL),
-                ProtocolSupport::Full,
-            )],
+            [(StreamProtocol::new(SYNC_PROTOCOL), ProtocolSupport::Full)],
             request_response::Config::default(),
         );
         Ok(MyBehaviour { mdns, sync })

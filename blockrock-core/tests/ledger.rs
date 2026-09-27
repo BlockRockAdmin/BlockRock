@@ -51,7 +51,13 @@ fn double_spend_inside_one_block_is_rejected() {
 
     // Alice holds 100: each transfer is affordable on its own, the pair is not.
     let first = Transaction::new("Alice".to_string(), "Bob".to_string(), 100, 0, &alice_key);
-    let second = Transaction::new("Alice".to_string(), "Charlie".to_string(), 100, 1, &alice_key);
+    let second = Transaction::new(
+        "Alice".to_string(),
+        "Charlie".to_string(),
+        100,
+        1,
+        &alice_key,
+    );
 
     let error = chain
         .add_block(vec![first, second], "Node1", &authority_key)
@@ -90,7 +96,13 @@ fn replaying_a_signed_transaction_is_rejected() {
     assert!(matches!(error, ChainError::DuplicateTransaction(_)));
 
     // A fresh signature on a stale nonce is rejected too.
-    let stale = Transaction::new("Alice".to_string(), "Charlie".to_string(), 10, 0, &alice_key);
+    let stale = Transaction::new(
+        "Alice".to_string(),
+        "Charlie".to_string(),
+        10,
+        0,
+        &alice_key,
+    );
     let error = chain
         .add_block(vec![stale], "Node1", &authority_key)
         .unwrap_err();
@@ -124,7 +136,9 @@ fn an_unauthorized_node_cannot_seal_a_block() {
     );
 
     // Nor can it borrow an authorized name it holds no key for.
-    let error = chain.add_block(vec![tx], "Node1", &intruder_key).unwrap_err();
+    let error = chain
+        .add_block(vec![tx], "Node1", &intruder_key)
+        .unwrap_err();
     assert_eq!(error, ChainError::AuthorityKeyMismatch("Node1".to_string()));
     assert_eq!(chain.blocks.len(), 1);
 }
@@ -171,7 +185,12 @@ fn an_unsealed_block_is_refused() {
     } = fixture();
 
     let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
-    let unsealed = Block::new(1, vec![tx], chain.blocks[0].hash.clone(), "Node1".to_string());
+    let unsealed = Block::new(
+        1,
+        vec![tx],
+        chain.blocks[0].hash.clone(),
+        "Node1".to_string(),
+    );
 
     assert_eq!(
         chain.try_append_block(unsealed),
@@ -232,7 +251,13 @@ fn a_longer_valid_chain_is_adopted() {
     assert_eq!(chain.genesis_hash(), peer.genesis_hash());
 
     for nonce in 0..2 {
-        let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, nonce, &alice_key);
+        let tx = Transaction::new(
+            "Alice".to_string(),
+            "Bob".to_string(),
+            10,
+            nonce,
+            &alice_key,
+        );
         peer.add_block(vec![tx], "Node1", &authority_key).unwrap();
     }
 
@@ -310,15 +335,11 @@ fn two_authorities_can_both_seal_blocks() {
     chain.register_authority("Bob", bob.verifying_key());
 
     // Alice seals a block.
-    chain
-        .add_block(Vec::new(), "Alice", &alice)
-        .unwrap();
+    chain.add_block(Vec::new(), "Alice", &alice).unwrap();
     assert_eq!(chain.blocks.len(), 2);
 
     // Bob seals the next block.
-    chain
-        .add_block(Vec::new(), "Bob", &bob)
-        .unwrap();
+    chain.add_block(Vec::new(), "Bob", &bob).unwrap();
     assert_eq!(chain.blocks.len(), 3);
 
     // Both authorities are recognised.
@@ -469,7 +490,11 @@ fn many_transactions_share_a_single_block() {
         chain.queue_transaction(reading).unwrap();
     }
 
-    assert_eq!(chain.pending_count(), 10, "tutte in attesa, nessuna sigillata");
+    assert_eq!(
+        chain.pending_count(),
+        10,
+        "tutte in attesa, nessuna sigillata"
+    );
     assert!(
         !chain.is_worth_sealing(),
         "dieci letture non bastano a riempire un lotto"
@@ -582,14 +607,8 @@ fn the_mempool_refuses_more_than_it_can_hold() {
         let name = format!("sensore{}", queued);
         let key = SigningKey::generate(&mut OsRng);
         chain.add_public_key(&name, key.verifying_key());
-        let reading = Transaction::new_with_payload(
-            name.clone(),
-            name,
-            0,
-            0,
-            Some(filler.clone()),
-            &key,
-        );
+        let reading =
+            Transaction::new_with_payload(name.clone(), name, 0, 0, Some(filler.clone()), &key);
         match chain.queue_transaction(reading) {
             Ok(_) => queued += 1,
             Err(error) => break error,
@@ -619,14 +638,23 @@ fn one_sender_can_queue_a_sequence_in_the_same_block() {
     // Tre trasferimenti di fila, senza aspettare un blocco fra l'uno e
     // l'altro: i nonce proseguono contando anche la coda.
     for nonce in 0..3 {
-        let tx = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, nonce, &alice_key);
+        let tx = Transaction::new(
+            "Alice".to_string(),
+            "Bob".to_string(),
+            10,
+            nonce,
+            &alice_key,
+        );
         chain
             .queue_transaction(tx)
             .unwrap_or_else(|e| panic!("nonce {} rifiutato: {}", nonce, e));
     }
     assert_eq!(chain.pending_count(), 3);
 
-    chain.seal_mempool("Node1", &authority_key).unwrap().unwrap();
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .unwrap();
 
     assert_eq!(chain.blocks.last().unwrap().transactions.len(), 3);
     assert_eq!(chain.balance_of("Alice"), 70);
@@ -673,6 +701,10 @@ fn a_gap_in_the_sequence_is_still_refused() {
     let skipped = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 2, &alice_key);
     assert!(matches!(
         chain.queue_transaction(skipped),
-        Err(ChainError::InvalidNonce { expected: 1, found: 2, .. })
+        Err(ChainError::InvalidNonce {
+            expected: 1,
+            found: 2,
+            ..
+        })
     ));
 }

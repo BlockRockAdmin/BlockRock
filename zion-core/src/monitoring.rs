@@ -222,7 +222,10 @@ fn read_cpu_totals() -> io::Result<(u64, u64)> {
         .collect::<Result<_, _>>()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if fields.len() < 4 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid /proc/stat"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid /proc/stat",
+        ));
     }
     let total = fields.iter().sum();
     let idle = fields[3] + fields.get(4).copied().unwrap_or(0);
@@ -243,7 +246,10 @@ fn read_memory_usage() -> io::Result<f64> {
     }
     match (total, available) {
         (Some(total), Some(available)) if total > 0.0 => Ok(100.0 * (1.0 - available / total)),
-        _ => Err(io::Error::new(io::ErrorKind::InvalidData, "invalid /proc/meminfo")),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid /proc/meminfo",
+        )),
     }
 }
 
@@ -397,7 +403,10 @@ mod tests {
         let stressed = SystemVitals::new(100.0, 100.0, 150.0, 0.0);
         assert_eq!(brain.evaluate(stressed).action, MetabolicAction::Maintain);
         assert_eq!(brain.evaluate(stressed).action, MetabolicAction::Maintain);
-        assert_eq!(brain.evaluate(stressed).action, MetabolicAction::Hypertrophy);
+        assert_eq!(
+            brain.evaluate(stressed).action,
+            MetabolicAction::Hypertrophy
+        );
     }
 
     #[test]

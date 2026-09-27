@@ -43,7 +43,10 @@ fn a_rejected_block_leaves_no_trace() {
         "un blocco rifiutato non deve promuovere chi l'ha mandato ad autorita'"
     );
     assert!(
-        !chain.clone().add_block(Vec::new(), "mallory", &mallory).is_ok(),
+        !chain
+            .clone()
+            .add_block(Vec::new(), "mallory", &mallory)
+            .is_ok(),
         "e mallory non deve poter sigillare sulla nostra catena"
     );
 }

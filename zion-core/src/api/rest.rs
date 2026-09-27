@@ -7,8 +7,8 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use reqwest::Client;
 use rocket::http::{Header, Status};
 use rocket::response::stream::{Event, EventStream};
-use rocket::serde::json::Json;
 use rocket::response::Responder;
+use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::sync::broadcast::{error::RecvError, Sender};
 use rocket::{get, post, Request, State};
@@ -235,7 +235,10 @@ pub async fn get_account(
 ) -> Result<Json<AccountState>, ApiFailure> {
     let blockchain = state.lock().await;
     if blockchain.public_key(name).is_none() && !blockchain.balances.contains_key(name) {
-        return Err(failure(Status::NotFound, format!("unknown account '{}'", name)));
+        return Err(failure(
+            Status::NotFound,
+            format!("unknown account '{}'", name),
+        ));
     }
     Ok(Json(account_state(&blockchain, name.to_string())))
 }
@@ -307,8 +310,10 @@ pub async fn metabolism_status(state: &State<SharedMetabolicStatus>) -> Json<Met
 /// viaggia con lui: incluso a compile time e risolto rispetto al crate, non
 /// alla working directory. Letto da disco falliva a seconda di come il nodo
 /// veniva avviato, e restituiva un 200 con dentro la stringa d'errore.
-const MODULES_MANIFEST: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/modules/blockchain/modules.yaml"));
+const MODULES_MANIFEST: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/modules/blockchain/modules.yaml"
+));
 
 #[get("/modules", format = "json")]
 pub async fn get_modules() -> Json<String> {

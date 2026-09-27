@@ -95,7 +95,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn block_count(http: &reqwest::Client, base: &str) -> Result<usize, Box<dyn std::error::Error>> {
-    let blocks: Value = http.get(format!("{}/blocks", base)).send().await?.json().await?;
+async fn block_count(
+    http: &reqwest::Client,
+    base: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let blocks: Value = http
+        .get(format!("{}/blocks", base))
+        .send()
+        .await?
+        .json()
+        .await?;
     Ok(blocks.as_array().map_or(0, |b| b.len()))
 }

@@ -54,7 +54,8 @@ fn signing_payload(
     nonce: u64,
     data: Option<&str>,
 ) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(TRANSACTION_DOMAIN.len() + sender.len() + receiver.len() + 32);
+    let mut payload =
+        Vec::with_capacity(TRANSACTION_DOMAIN.len() + sender.len() + receiver.len() + 32);
     payload.extend_from_slice(TRANSACTION_DOMAIN);
     for field in [sender.as_bytes(), receiver.as_bytes()] {
         payload.extend_from_slice(&(field.len() as u64).to_le_bytes());

@@ -59,7 +59,9 @@ async fn start() -> TestServer {
             .unwrap();
 
     let alice = SigningKey::generate(&mut OsRng);
-    let mut chain = store.load_or_create(&identity.name, HashMap::new()).unwrap();
+    let mut chain = store
+        .load_or_create(&identity.name, HashMap::new())
+        .unwrap();
     chain.register_authority(&identity.name, identity.signing_key.verifying_key());
     chain.add_public_key("Alice", alice.verifying_key());
     store.save(&chain).unwrap();
@@ -78,7 +80,10 @@ async fn start() -> TestServer {
     let endpoint = format!("http://127.0.0.1:{}", port);
     // Attende che il server sia in ascolto.
     for _ in 0..50 {
-        if TransactionServiceClient::connect(endpoint.clone()).await.is_ok() {
+        if TransactionServiceClient::connect(endpoint.clone())
+            .await
+            .is_ok()
+        {
             break;
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -94,9 +99,8 @@ async fn start() -> TestServer {
 }
 
 fn sign(key: &SigningKey, sender: &str, receiver: &str, amount: u64, nonce: u64) -> String {
-    let payload =
-        Transaction::unsigned(sender.to_string(), receiver.to_string(), amount, nonce)
-            .signing_payload();
+    let payload = Transaction::unsigned(sender.to_string(), receiver.to_string(), amount, nonce)
+        .signing_payload();
     hex::encode(key.sign(&payload).to_bytes())
 }
 
@@ -274,14 +278,8 @@ async fn a_saturated_node_answers_resource_exhausted_not_invalid_argument() {
             let name = format!("riempitivo{}", i);
             let key = SigningKey::generate(&mut OsRng);
             chain.add_public_key(&name, key.verifying_key());
-            let tx = Transaction::new_with_payload(
-                name.clone(),
-                name,
-                0,
-                0,
-                Some(filler.clone()),
-                &key,
-            );
+            let tx =
+                Transaction::new_with_payload(name.clone(), name, 0, 0, Some(filler.clone()), &key);
             if chain.queue_transaction(tx).is_err() {
                 break;
             }

@@ -167,11 +167,7 @@ impl Mempool {
         self.bytes = 0;
         // Sort by (sender, nonce) so that transactions from the same sender
         // are applied in the correct order within a block.
-        transactions.sort_by(|a, b| {
-            a.sender
-                .cmp(&b.sender)
-                .then_with(|| a.nonce.cmp(&b.nonce))
-        });
+        transactions.sort_by(|a, b| a.sender.cmp(&b.sender).then_with(|| a.nonce.cmp(&b.nonce)));
         transactions
     }
 
