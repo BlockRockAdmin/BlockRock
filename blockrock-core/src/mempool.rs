@@ -189,14 +189,14 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
+    type ChainData<'a> = (
+        &'a HashMap<String, VerifyingKey>,
+        &'a HashMap<String, Amount>,
+        &'a HashMap<String, u64>,
+    );
+
     /// Helper: extracts the fields Mempool::queue needs from a Blockchain.
-    fn chain_data(
-        chain: &Blockchain,
-    ) -> (
-        &HashMap<String, VerifyingKey>,
-        &HashMap<String, Amount>,
-        &HashMap<String, u64>,
-    ) {
+    fn chain_data(chain: &Blockchain) -> ChainData<'_> {
         (&chain.public_keys, &chain.balances, &chain.nonces)
     }
 

@@ -413,8 +413,7 @@ impl Blockchain {
                 fs::create_dir_all(parent)?;
             }
         }
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
 
         let mut temporary = path.as_os_str().to_owned();
         temporary.push(".tmp");
@@ -426,8 +425,7 @@ impl Blockchain {
     /// Carica una blockchain da file JSON
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let data = fs::read_to_string(path)?;
-        let mut chain: Blockchain = serde_json::from_str(&data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let mut chain: Blockchain = serde_json::from_str(&data).map_err(std::io::Error::other)?;
         chain.rebuild_transaction_index();
         Ok(chain)
     }

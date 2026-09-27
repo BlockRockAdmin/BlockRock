@@ -28,6 +28,9 @@ pub struct MyBehaviour {
     pub sync: SyncBehaviour,
 }
 
+// Un evento per messaggio di rete, consumato subito dal loop dello swarm: la
+// taglia della variante Sync non conta.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum CustomEvent {
     Mdns(MdnsEvent),

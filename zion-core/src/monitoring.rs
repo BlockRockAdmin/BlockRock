@@ -181,14 +181,9 @@ pub trait VitalsSource: Send + 'static {
 
 /// Minimal Linux source for a node running Zion Core. Latency and error rate are
 /// intentionally zero here: adapters may supply application-specific values.
+#[derive(Default)]
 pub struct ProcfsVitalsSource {
     previous_cpu: Option<(u64, u64)>,
-}
-
-impl Default for ProcfsVitalsSource {
-    fn default() -> Self {
-        Self { previous_cpu: None }
-    }
 }
 
 impl VitalsSource for ProcfsVitalsSource {

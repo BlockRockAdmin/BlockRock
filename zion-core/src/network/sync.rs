@@ -41,6 +41,9 @@ pub struct ChainSnapshot {
     pub authorities: Authorities,
 }
 
+// Un messaggio per blocco sigillato: la differenza di taglia fra le varianti
+// non pesa, e un Box renderebbe solo piu' scomodo costruirle e confrontarle.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncRequest {
     /// "Send me your chain", asked of every peer we discover.
