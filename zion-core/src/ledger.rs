@@ -8,8 +8,8 @@ use blockrock_core::{
     blockchain::{Blockchain, ChainError, MINT_ACCOUNT},
     transaction::Transaction,
 };
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::api::rest::BlockAnnouncer;
@@ -126,9 +126,9 @@ pub async fn seal_pending(
         return Ok(None);
     };
 
-    store
-        .save(&chain)
-        .map_err(|error| SubmitError::Internal(format!("block sealed but not persisted: {}", error)))?;
+    store.save(&chain).map_err(|error| {
+        SubmitError::Internal(format!("block sealed but not persisted: {}", error))
+    })?;
 
     if let Some(block) = chain.blocks.last() {
         let announcement = announcement_of(&chain, block.clone());

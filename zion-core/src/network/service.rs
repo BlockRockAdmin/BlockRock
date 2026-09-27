@@ -76,7 +76,11 @@ pub async fn handle_sync_event(
                     let mut chain = blockchain.lock().await;
                     match apply_snapshot(&mut chain, snapshot) {
                         Ok(true) => {
-                            info!("catena adottata da {}: {} blocchi", peer, chain.blocks.len());
+                            info!(
+                                "catena adottata da {}: {} blocchi",
+                                peer,
+                                chain.blocks.len()
+                            );
                             persist(store, &chain);
                         }
                         Ok(false) => {}

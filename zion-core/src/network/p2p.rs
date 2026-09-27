@@ -28,6 +28,9 @@ pub struct MyBehaviour {
     pub sync: SyncBehaviour,
 }
 
+// Un evento per messaggio di rete, consumato subito dal loop dello swarm: la
+// taglia della variante Sync non conta.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum CustomEvent {
     Mdns(MdnsEvent),
@@ -50,10 +53,7 @@ impl MyBehaviour {
     pub fn new(local_peer_id: PeerId) -> Result<Self, Box<dyn Error>> {
         let mdns = Mdns::new(MdnsConfig::default(), local_peer_id)?;
         let sync = JsonBehaviour::new(
-            [(
-                StreamProtocol::new(SYNC_PROTOCOL),
-                ProtocolSupport::Full,
-            )],
+            [(StreamProtocol::new(SYNC_PROTOCOL), ProtocolSupport::Full)],
             request_response::Config::default(),
         );
         Ok(MyBehaviour { mdns, sync })

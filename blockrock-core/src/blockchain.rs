@@ -26,7 +26,10 @@ pub enum ChainError {
     AuthorityKeyMismatch(String),
     UnsealedBlock(u32),
     InvalidSeal(u32),
-    WrongIndex { expected: u32, found: u32 },
+    WrongIndex {
+        expected: u32,
+        found: u32,
+    },
     BrokenLink(u32),
     CorruptedHash(u32),
     GenesisMismatch,
@@ -70,7 +73,11 @@ impl fmt::Display for ChainError {
                 write!(f, "no public key registered for authority '{}'", name)
             }
             ChainError::AuthorityKeyMismatch(name) => {
-                write!(f, "signing key does not match the key registered for '{}'", name)
+                write!(
+                    f,
+                    "signing key does not match the key registered for '{}'",
+                    name
+                )
             }
             ChainError::UnsealedBlock(index) => write!(f, "block {} carries no seal", index),
             ChainError::InvalidSeal(index) => write!(f, "block {} has an invalid seal", index),
@@ -80,14 +87,24 @@ impl fmt::Display for ChainError {
             ChainError::BrokenLink(index) => {
                 write!(f, "block {} does not link to the previous hash", index)
             }
-            ChainError::CorruptedHash(index) => write!(f, "block {} hash does not match its content", index),
-            ChainError::GenesisMismatch => write!(f, "the chains do not share the same genesis block"),
-            ChainError::DuplicateTransaction(id) => write!(f, "transaction {} is already on chain", id),
+            ChainError::CorruptedHash(index) => {
+                write!(f, "block {} hash does not match its content", index)
+            }
+            ChainError::GenesisMismatch => {
+                write!(f, "the chains do not share the same genesis block")
+            }
+            ChainError::DuplicateTransaction(id) => {
+                write!(f, "transaction {} is already on chain", id)
+            }
             ChainError::TamperedTransaction(id) => {
                 write!(f, "transaction {} id does not match its content", id)
             }
-            ChainError::UnknownSender(sender) => write!(f, "no public key registered for '{}'", sender),
-            ChainError::InvalidSignature(id) => write!(f, "transaction {} has an invalid signature", id),
+            ChainError::UnknownSender(sender) => {
+                write!(f, "no public key registered for '{}'", sender)
+            }
+            ChainError::InvalidSignature(id) => {
+                write!(f, "transaction {} has an invalid signature", id)
+            }
             ChainError::InvalidNonce {
                 sender,
                 expected,
@@ -167,10 +184,7 @@ impl Blockchain {
     /// `initial_authorities` lists additional authorities (name → public key)
     /// that are allowed to seal blocks from the start. The local `authority`
     /// is always included automatically.
-    pub fn new(
-        authority: String,
-        initial_authorities: HashMap<String, VerifyingKey>,
-    ) -> Self {
+    pub fn new(authority: String, initial_authorities: HashMap<String, VerifyingKey>) -> Self {
         let initial_balances = HashMap::from([
             (MINT_ACCOUNT.to_string(), 1000),
             ("Alice".to_string(), 100),
@@ -399,8 +413,7 @@ impl Blockchain {
                 fs::create_dir_all(parent)?;
             }
         }
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
 
         let mut temporary = path.as_os_str().to_owned();
         temporary.push(".tmp");
@@ -412,8 +425,7 @@ impl Blockchain {
     /// Carica una blockchain da file JSON
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let data = fs::read_to_string(path)?;
-        let mut chain: Blockchain = serde_json::from_str(&data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let mut chain: Blockchain = serde_json::from_str(&data).map_err(std::io::Error::other)?;
         chain.rebuild_transaction_index();
         Ok(chain)
     }
@@ -557,11 +569,7 @@ fn apply_transaction(
             return Err(ChainError::InvalidSignature(transaction.id.clone()));
         }
 
-        let expected = state
-            .nonces
-            .get(&transaction.sender)
-            .copied()
-            .unwrap_or(0);
+        let expected = state.nonces.get(&transaction.sender).copied().unwrap_or(0);
         if transaction.nonce != expected {
             return Err(ChainError::InvalidNonce {
                 sender: transaction.sender.clone(),
@@ -598,7 +606,9 @@ fn apply_transaction(
         .unwrap_or(0)
         .checked_add(transaction.amount)
         .ok_or_else(|| ChainError::BalanceOverflow(transaction.receiver.clone()))?;
-    state.balances.insert(transaction.receiver.clone(), credited);
+    state
+        .balances
+        .insert(transaction.receiver.clone(), credited);
 
     Ok(())
 }

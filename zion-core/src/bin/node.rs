@@ -15,13 +15,13 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::{select, sync::mpsc, sync::oneshot, sync::Mutex};
 use tracing::{error, info, warn};
 use zion_core::{
-    ledger,
     api::{
         grpc::{start_grpc, GrpcContext},
         rest::{SensorReading, TronService},
     },
     config::Config,
     identity::NodeIdentity,
+    ledger,
     monitoring::{
         run_monitoring_loop, shared_metabolic_status, Hypothalamus, MetabolicWebhook,
         ProcfsVitalsSource,
@@ -225,10 +225,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                         connected.insert(peer_id);
                     }
-                    SwarmEvent::ConnectionClosed { peer_id, num_established, .. } => {
-                        if num_established == 0 {
-                            connected.remove(&peer_id);
-                        }
+                    SwarmEvent::ConnectionClosed { peer_id, num_established: 0, .. } => {
+                        connected.remove(&peer_id);
                     }
                     _ => {}
                 }
@@ -292,13 +290,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // — ma lo riprenderanno col sync al prossimo avvio.
     if is_authority {
         match ledger::seal_pending(
-        &shutdown_context.blockchain,
-        &shutdown_context.identity,
-        &shutdown_context.store,
-        &shutdown_context.announcer,
-    )
-    .await
-    {
+            &shutdown_context.blockchain,
+            &shutdown_context.identity,
+            &shutdown_context.store,
+            &shutdown_context.announcer,
+        )
+        .await
+        {
             Ok(Some(index)) => info!("blocco {} sigillato durante l'arresto", index),
             Ok(None) => { /* niente in attesa */ }
             Err(e) => error!("transazioni in attesa non salvate durante l'arresto: {}", e),

@@ -18,6 +18,12 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Prima di tutto: non costa niente e non ha bisogno di compilare.
+      - name: Format
+        run: cargo fmt --all -- --check
 
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
@@ -31,5 +37,31 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets
 
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
       - name: Test
         run: cargo test --workspace
+
+  nexus:
+    name: Build Nexus dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: nexus/package-lock.json
+
+      # `npm ci` fallisce se il lockfile e' rotto o non combacia con
+      # package.json: e' il controllo che mancava quando ci e' finito dentro
+      # un conflitto di merge.
+      - name: Install
+        working-directory: nexus
+        run: npm ci
+
+      - name: Build (vue-tsc + vite)
+        working-directory: nexus
+        run: npm run build

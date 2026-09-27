@@ -21,11 +21,16 @@ use crate::identity::NodeIdentity;
 use crate::ledger::{self, SubmitError};
 use crate::storage::ChainStore;
 
+// Codice generato da tonic-build: i client restituiscono `tonic::Status` per
+// valore, che clippy recente segnala come `result_large_err`. Non e' nostro da
+// cambiare, quindi il lint si spegne solo qui.
+#[allow(clippy::result_large_err)]
 pub mod blockrock {
     tonic::include_proto!("blockrock");
 }
 
-const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blockrock_descriptor.bin"));
+const FILE_DESCRIPTOR_SET: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/blockrock_descriptor.bin"));
 
 /// Quello che serve al gRPC per fare le stesse cose della REST. Sono gli stessi
 /// riferimenti che tiene il server HTTP: due porte, un solo nodo.
@@ -163,8 +168,7 @@ impl TransactionService for MyTransactionService {
 /// e qui serve solo un messaggio che il chiamante trasforma in
 /// `InvalidArgument`.
 fn decode_signature(signature: &str) -> Result<ed25519_dalek::Signature, String> {
-    let bytes = hex::decode(signature)
-        .map_err(|e| format!("signature is not valid hex: {}", e))?;
+    let bytes = hex::decode(signature).map_err(|e| format!("signature is not valid hex: {}", e))?;
     let bytes: [u8; 64] = bytes
         .as_slice()
         .try_into()
