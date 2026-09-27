@@ -21,6 +21,10 @@ use crate::identity::NodeIdentity;
 use crate::ledger::{self, SubmitError};
 use crate::storage::ChainStore;
 
+// Codice generato da tonic-build: i client restituiscono `tonic::Status` per
+// valore, che clippy recente segnala come `result_large_err`. Non e' nostro da
+// cambiare, quindi il lint si spegne solo qui.
+#[allow(clippy::result_large_err)]
 pub mod blockrock {
     tonic::include_proto!("blockrock");
 }

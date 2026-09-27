@@ -225,10 +225,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                         connected.insert(peer_id);
                     }
-                    SwarmEvent::ConnectionClosed { peer_id, num_established, .. } => {
-                        if num_established == 0 {
-                            connected.remove(&peer_id);
-                        }
+                    SwarmEvent::ConnectionClosed { peer_id, num_established: 0, .. } => {
+                        connected.remove(&peer_id);
                     }
                     _ => {}
                 }
