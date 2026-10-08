@@ -22,9 +22,9 @@ use crate::ledger::{self, SubmitError};
 use crate::storage::ChainStore;
 
 // Codice generato da tonic-build: i client restituiscono `tonic::Status` per
-// valore, che clippy recente segnala come `result_large_err`. Non e' nostro da
-// cambiare, quindi il lint si spegne solo qui.
-#[allow(clippy::result_large_err)]
+// valore e `async_trait` aggiunge `must_use` ai future gia' must-use. Clippy
+// recente segnala entrambi; i lint si spengono solo sul modulo generato.
+#[allow(clippy::result_large_err, clippy::double_must_use)]
 pub mod blockrock {
     tonic::include_proto!("blockrock");
 }
