@@ -3,6 +3,9 @@
 Questa cartella contiene il materiale di supporto al progetto: loghi, diagrammi e file statici.
 Per guide dettagliate e istruzioni di build consulta il [Wiki ufficiale](https://github.com/BlockRockAdmin/BlockRock/wiki).
 
+La [visione di prodotto](visione-prodotto.md) descrive il percorso personale e
+finanziario che BlockRock intende supportare.
+
 ## Come contribuire
 1. Leggi le linee guida in [CONTRIBUTING.md](../CONTRIBUTING.md).
 2. Proponi modifiche aprendo una Pull Request.

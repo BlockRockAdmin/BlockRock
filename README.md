@@ -44,6 +44,9 @@ Consulta il wiki per guide aggiornate, dettagli sui moduli, esempi e FAQ.
 Avvio del nodo, consenso PoA, API REST e sincronizzazione fra nodi sono
 descritti in [docs/nodo.md](docs/nodo.md).
 
+La visione del prodotto e il percorso di recupero personale e finanziario sono
+descritti in [docs/visione-prodotto.md](docs/visione-prodotto.md).
+
 Il ciclo di monitoraggio omeostatico di Zion Core e l'endpoint di telemetria
 `/metabolism` sono descritti in [docs/hypothalamus.md](docs/hypothalamus.md).
 
