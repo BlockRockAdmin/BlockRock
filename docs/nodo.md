@@ -309,12 +309,15 @@ cargo run --example sync_demo
 
 ## Limiti noti
 
-- **Rete a singola autorità**: i nodi che devono accettarsi i blocchi a vicenda
-  devono condividere lo stesso `data/authority.key`. Un elenco di autorità
-  multiple, ognuna con la sua chiave, è il passo successivo.
+- **Nessuna finalità o quorum**: il nodo adotta una catena valida più lunga che
+  condivide il genesis. Non risolve automaticamente due fork validi della stessa
+  lunghezza e non richiede un quorum prima di considerare definitivo un blocco.
+- **Gestione delle autorità limitata**: i validatori iniziali si configurano
+  alla creazione della catena; non c'è ancora una procedura di governance per
+  aggiungerli, rimuoverli o ruotarne le chiavi su una rete attiva.
 - **Le chiavi dei conti non sono on-chain**: viaggiano insieme ai blocchi nei
   messaggi di sync (una registrazione già nota non viene mai sovrascritta).
   Registrarle con una transazione dedicata è la soluzione pulita.
-- **Niente mempool**: ogni transazione accettata diventa subito un blocco.
-- **Nessuna risoluzione dei fork oltre "la più lunga vince"**: due autorità che
-  sigillano in parallelo non vengono riconciliate.
+- **Persistenza semplice**: la catena viene salvata in un unico file JSON. È
+  adatta al prototipo, ma va riprogettata per catene grandi e operatività
+  continuativa.
