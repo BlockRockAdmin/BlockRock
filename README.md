@@ -44,6 +44,11 @@ Consulta il wiki per guide aggiornate, dettagli sui moduli, esempi e FAQ.
 Avvio del nodo, consenso PoA, API REST e sincronizzazione fra nodi sono
 descritti in [docs/nodo.md](docs/nodo.md).
 
+Le transazioni accodate da un nodo non validatore possono raggiungere un
+validatore attraverso i peer; i blocchi confermati tornano anche attraverso
+i relay. Le ricevute, i limiti e la prova su tre nodi sono descritti nella
+sezione «Transazioni ricevute da un nodo non validatore» della stessa guida.
+
 La visione del prodotto e il percorso di recupero personale e finanziario sono
 descritti in [docs/visione-prodotto.md](docs/visione-prodotto.md).
 

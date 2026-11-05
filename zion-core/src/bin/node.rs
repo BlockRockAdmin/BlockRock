@@ -30,6 +30,7 @@ use zion_core::{
         p2p::{start_p2p_node, CustomEvent},
         service::handle_sync_event,
         sync::{BlockAnnouncement, SyncRequest},
+        transactions::{TransactionGossip, GOSSIP_INTERVAL},
     },
     server::{self, ServerContext},
     storage::ChainStore,
@@ -144,6 +145,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut swarm = start_p2p_node().await?;
     let mut connected: HashSet<PeerId> = HashSet::new();
     let mut greeted: HashSet<PeerId> = HashSet::new();
+    let mut transaction_gossip = TransactionGossip::default();
+    let mut gossip_tick = tokio::time::interval(GOSSIP_INTERVAL);
+    gossip_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     // REST e gRPC servono lo stesso nodo e condividono gli stessi riferimenti.
     let grpc_context = GrpcContext {
@@ -196,6 +200,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         select! {
+            _ = gossip_tick.tick(), if !stopping => {}
             _ = shutdown.as_mut(), if !stopping => {
                 info!("segnale di arresto ricevuto: fermo i servizi");
                 stopping = true;
@@ -222,8 +227,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::Behaviour(CustomEvent::Sync(event)) => {
                         handle_sync_event(&mut swarm, &blockchain, Some(&store), event).await;
                     }
+                    SwarmEvent::Behaviour(CustomEvent::Transaction(event)) => {
+                        transaction_gossip.handle_event(&mut swarm, &blockchain, event).await;
+                    }
                     SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                        connected.insert(peer_id);
+                        if connected.insert(peer_id) {
+                            // Also sync inbound connections: the peer that
+                            // dialled us may have the newer committed state.
+                            swarm.behaviour_mut().sync.send_request(&peer_id, SyncRequest::GetChain);
+                        }
                     }
                     SwarmEvent::ConnectionClosed { peer_id, num_established: 0, .. } => {
                         connected.remove(&peer_id);
@@ -260,6 +272,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
                 stopping = true;
             }
+        }
+
+        if !stopping {
+            let chain = blockchain.lock().await;
+            transaction_gossip.drive(&mut swarm, &chain, &connected);
         }
 
         if stopping {

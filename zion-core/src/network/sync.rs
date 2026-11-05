@@ -77,10 +77,16 @@ pub fn snapshot_of(chain: &Blockchain) -> ChainSnapshot {
 }
 
 pub fn announcement_of(chain: &Blockchain, block: Block) -> BlockAnnouncement {
-    BlockAnnouncement {
-        block,
-        accounts: chain.public_keys.clone(),
-    }
+    let accounts = block
+        .transactions
+        .iter()
+        .filter_map(|tx| {
+            chain
+                .public_key(&tx.sender)
+                .map(|key| (tx.sender.clone(), *key))
+        })
+        .collect();
+    BlockAnnouncement { block, accounts }
 }
 
 /// Applies a block announced by a peer. Blocks that do not extend our tip are

@@ -1,5 +1,5 @@
 use blockrock_core::block::Block;
-use blockrock_core::blockchain::{Blockchain, ChainError};
+use blockrock_core::blockchain::{Blockchain, ChainError, MINT_ACCOUNT};
 use blockrock_core::transaction::Transaction;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
@@ -707,4 +707,211 @@ fn a_gap_in_the_sequence_is_still_refused() {
             ..
         })
     ));
+}
+
+#[test]
+fn a_peer_block_removes_confirmed_transactions_and_keeps_their_successors() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+    let first = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
+    let second = Transaction::new("Alice".to_string(), "Bob".to_string(), 20, 1, &alice_key);
+    chain.queue_transaction(first.clone()).unwrap();
+    chain.queue_transaction(second.clone()).unwrap();
+
+    let block = Block::sealed(
+        1,
+        vec![first.clone()],
+        chain.blocks[0].hash.clone(),
+        "Node1".to_string(),
+        &authority_key,
+    );
+    chain.try_append_block(block).unwrap();
+
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), second.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&second));
+    assert_eq!(chain.get_transaction(&first.id), Some(first));
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .unwrap();
+    assert_eq!(chain.balance_of("Alice"), 70);
+    assert_eq!(chain.next_nonce("Alice"), 2);
+    assert_eq!(chain.pending_count(), 0);
+    assert!(chain.validate_chain());
+}
+
+#[test]
+fn a_conflicting_peer_block_drops_unaffordable_sequences_but_keeps_other_senders() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+    let bob_key = SigningKey::generate(&mut OsRng);
+    chain.add_public_key("Bob", bob_key.verifying_key());
+    for (nonce, amount) in [(0, 10), (1, 30), (2, 10)] {
+        chain
+            .queue_transaction(Transaction::new(
+                "Alice".to_string(),
+                "Charlie".to_string(),
+                amount,
+                nonce,
+                &alice_key,
+            ))
+            .unwrap();
+    }
+    let independent = Transaction::new("Bob".to_string(), "Charlie".to_string(), 5, 0, &bob_key);
+    chain.queue_transaction(independent.clone()).unwrap();
+
+    // This alternative nonce 0 leaves Alice with only 10. Her queued nonce 1
+    // can no longer pay 30; nonce 2 must then be removed because of the gap.
+    let conflict = Transaction::new(
+        "Alice".to_string(),
+        "Charlie".to_string(),
+        90,
+        0,
+        &alice_key,
+    );
+    let block = Block::sealed(
+        1,
+        vec![conflict],
+        chain.blocks[0].hash.clone(),
+        "Node1".to_string(),
+        &authority_key,
+    );
+    chain.try_append_block(block).unwrap();
+
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), independent.weight());
+    assert_eq!(
+        chain.mempool.pending_transactions().next(),
+        Some(&independent)
+    );
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .unwrap();
+    assert_eq!(chain.next_nonce("Alice"), 1);
+    assert_eq!(chain.next_nonce("Bob"), 1);
+    assert!(chain.validate_chain());
+}
+
+#[test]
+fn adopting_a_chain_revalidates_the_pending_sequence() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+    let mut peer = chain.clone();
+    let first = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
+    let second = Transaction::new("Alice".to_string(), "Bob".to_string(), 20, 1, &alice_key);
+    chain.queue_transaction(first.clone()).unwrap();
+    chain.queue_transaction(second.clone()).unwrap();
+    peer.add_block(vec![first], "Node1", &authority_key)
+        .unwrap();
+    peer.add_block(Vec::new(), "Node1", &authority_key).unwrap();
+
+    assert!(chain.try_adopt_chain(peer.get_blocks()).unwrap());
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), second.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&second));
+    chain
+        .seal_mempool("Node1", &authority_key)
+        .unwrap()
+        .unwrap();
+    assert_eq!(chain.balance_of("Alice"), 70);
+    assert_eq!(chain.next_nonce("Alice"), 2);
+    assert!(chain.validate_chain());
+}
+
+#[test]
+fn rejected_peer_blocks_and_snapshots_leave_the_mempool_unchanged() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+    let pending = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
+    chain.queue_transaction(pending.clone()).unwrap();
+    let unsealed = Block::new(
+        1,
+        vec![pending.clone()],
+        chain.blocks[0].hash.clone(),
+        "Node1".to_string(),
+    );
+    assert_eq!(
+        chain.try_append_block(unsealed),
+        Err(ChainError::UnsealedBlock(1))
+    );
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), pending.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&pending));
+
+    let mut peer = chain.clone();
+    peer.add_block(vec![pending.clone()], "Node1", &authority_key)
+        .unwrap();
+    peer.blocks[1].hash = "tampered".to_string();
+    assert_eq!(
+        chain.try_adopt_chain(peer.get_blocks()),
+        Err(ChainError::CorruptedHash(1))
+    );
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), pending.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&pending));
+    assert_eq!(chain.blocks.len(), 1);
+    assert_eq!(chain.balance_of("Alice"), 100);
+    assert_eq!(chain.next_nonce("Alice"), 0);
+}
+
+#[test]
+fn a_failed_seal_preserves_transactions_for_a_later_retry() {
+    let Fixture {
+        mut chain,
+        authority_key,
+        alice_key,
+    } = fixture();
+    let pending = Transaction::new("Alice".to_string(), "Bob".to_string(), 10, 0, &alice_key);
+    chain.queue_transaction(pending.clone()).unwrap();
+    let intruder = SigningKey::generate(&mut OsRng);
+
+    assert_eq!(
+        chain.seal_mempool("Intruder", &intruder),
+        Err(ChainError::UnauthorizedAuthority("Intruder".to_string()))
+    );
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), pending.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&pending));
+    assert_eq!(
+        chain.seal_mempool("Node1", &intruder),
+        Err(ChainError::AuthorityKeyMismatch("Node1".to_string()))
+    );
+    assert_eq!(chain.pending_count(), 1);
+    assert_eq!(chain.pending_weight(), pending.weight());
+    assert_eq!(chain.mempool.pending_transactions().next(), Some(&pending));
+
+    assert_eq!(chain.seal_mempool("Node1", &authority_key), Ok(Some(1)));
+    assert_eq!(chain.get_transaction(&pending.id), Some(pending));
+    assert_eq!(chain.pending_count(), 0);
+    assert_eq!(chain.pending_weight(), 0);
+    assert!(chain.validate_chain());
+}
+
+#[test]
+fn the_mint_account_cannot_enter_the_mempool_even_with_a_registered_key() {
+    let Fixture { mut chain, .. } = fixture();
+    let key = SigningKey::generate(&mut OsRng);
+    chain.add_public_key(MINT_ACCOUNT, key.verifying_key());
+    let mint = Transaction::new(MINT_ACCOUNT.to_string(), "Alice".to_string(), 10, 0, &key);
+
+    assert_eq!(
+        chain.queue_transaction(mint),
+        Err(ChainError::ReservedSender(MINT_ACCOUNT.to_string()))
+    );
+    assert_eq!(chain.pending_count(), 0);
+    assert_eq!(chain.pending_weight(), 0);
 }

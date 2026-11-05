@@ -297,6 +297,11 @@ I nodi si scoprono via mDNS e parlano il protocollo `/blockrock/sync/1.0.0`
 - la catena viene riscritta su disco dopo ogni blocco accettato, anche quando
   arriva dalla rete.
 
+Un blocco appena accettato viene anche inoltrato agli altri peer connessi.
+Un blocco già noto o rifiutato non viene inoltrato: i collegamenti circolari
+non producono conferme o trasferimenti aggiuntivi. Gli annunci contengono
+soltanto le chiavi dei mittenti presenti nel blocco.
+
 Il genesis è deterministico (timestamp fisso, nessuna transazione con chiave
 casuale), quindi due nodi con la stessa allocazione iniziale e lo stesso
 `AUTHORITY_NAME` concordano sul suo hash.
@@ -306,6 +311,72 @@ Per vedere il tutto senza configurare niente:
 ```bash
 cargo run --example sync_demo
 ```
+
+### Transazioni ricevute da un nodo non validatore
+
+REST e gRPC possono accodare transazioni anche su un nodo che non è autorità.
+Il nodo le inoltra ai peer connessi, che possono inoltrarle ancora fino a un
+validatore. Il blocco sigillato torna attraverso gli stessi collegamenti e
+rimuove dalle code le transazioni confermate. Un non validatore non tenta di
+sigillare neppure quando la propria coda supera la soglia del lotto.
+
+La propagazione usa `/blockrock/transactions/1.0.0`, distinto dal protocollo
+dei blocchi `/blockrock/sync/1.0.0`, che resta compatibile. Non richiede nuovi
+file di configurazione, chiavi o una nuova genesi. I nodi devono condividere
+la stessa genesi e ogni passaggio del percorso deve supportare il nuovo
+protocollo; un vecchio nodo continua a sincronizzare blocchi ma non inoltra
+le transazioni in attesa.
+
+Al primo collegamento entrambi i nodi chiedono la catena del peer, anche sul
+lato che riceve la connessione: il nodo che ha aperto il collegamento può
+avere uno stato più recente del validatore.
+
+Ogni messaggio porta la transazione firmata, la chiave del suo mittente e
+l'hash della genesi. Il ricevente applica gli stessi controlli di ID, firma,
+nonce, fondi e limiti della mempool. Una chiave già registrata non viene
+sostituita; la chiave di un mittente nuovo resta soltanto se la transazione
+entra effettivamente nella coda. Un pacchetto non può aggiungere autorità o
+fornire la chiave mancante di un validatore. Il conto di conio resta escluso.
+
+Le ricevute distinguono questi stati:
+
+| Stato | Significato |
+| --- | --- |
+| `Accepted` | Transazione accodata in RAM dal peer |
+| `Known` | Già presente nella sua mempool |
+| `Confirmed` | Già presente nella sua catena; il mittente può recuperare il blocco |
+| `Busy` / `Rejected` | Non accodata: coda piena o controlli non superati |
+
+Il nodo controlla la propria coda ogni 500 ms e dopo gli eventi di rete.
+Mantiene al massimo 16 richieste pendenti per peer e una per mittente, così
+i nonce arrivano nell'ordine corretto. Un errore di consegna, un rifiuto o
+una coda piena comportano un'attesa di 2 secondi per quella transazione;
+non bloccano gli altri mittenti. I duplicati non vengono riaccodati.
+
+Le ricevute di accodamento scadono dopo due tempi di blocco, oggi 10 secondi:
+se manca la conferma locale, il nodo riprova. Una risposta `Confirmed`
+richiede una sincronizzazione della catena, limitata a una richiesta per
+peer ogni 10 secondi, per recuperare anche un annuncio di blocco perso.
+Il nuovo snapshot viene validato con le regole già esistenti. Le cache delle
+transazioni seguono soltanto quelle ancora in attesa e peer connessi; una nuova
+connessione riceve anche ciò che era stato accodato prima del collegamento.
+
+La prova completa usa nodi e chiavi temporanei, senza TronGrid:
+
+```bash
+cargo test -p zion-core --test p2p_transactions
+```
+
+Il test invia una sequenza dalla REST di un nodo non validatore, attraversa
+un relay, conferma sul validatore e verifica il ritorno del blocco e i saldi
+su tutti e tre. Verifica anche un ciclo di collegamenti e il recupero dopo
+la perdita deliberata dell'annuncio di conferma.
+
+La risposta dell'API continua a significare **accettazione in RAM**, non
+persistenza o finalità. Mempool e ricevute restano volatili: un arresto prima
+della conferma può perdere transazioni. L'identità dei conti conserva il
+modello corrente di prima registrazione della chiave; la registrazione
+firmata on-chain e la durabilità della coda restano lavori successivi.
 
 ## Limiti noti
 

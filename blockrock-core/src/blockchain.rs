@@ -35,6 +35,7 @@ pub enum ChainError {
     GenesisMismatch,
     DuplicateTransaction(String),
     TamperedTransaction(String),
+    ReservedSender(String),
     UnknownSender(String),
     InvalidSignature(String),
     InvalidNonce {
@@ -98,6 +99,9 @@ impl fmt::Display for ChainError {
             }
             ChainError::TamperedTransaction(id) => {
                 write!(f, "transaction {} id does not match its content", id)
+            }
+            ChainError::ReservedSender(sender) => {
+                write!(f, "'{}' mints value and cannot enter the mempool", sender)
             }
             ChainError::UnknownSender(sender) => {
                 write!(f, "no public key registered for '{}'", sender)
@@ -256,6 +260,9 @@ impl Blockchain {
     /// **not** immediately sealed into a block; call [`seal_mempool`] to batch
     /// pending transactions into the next block.
     pub fn queue_transaction(&mut self, transaction: Transaction) -> Result<String, ChainError> {
+        if transaction.sender == MINT_ACCOUNT {
+            return Err(ChainError::ReservedSender(transaction.sender));
+        }
         let tx_exists = self.get_transaction(&transaction.id).is_some();
         self.mempool.queue(
             transaction,
@@ -290,12 +297,20 @@ impl Blockchain {
         authority: &str,
         signing_key: &SigningKey,
     ) -> Result<Option<u32>, ChainError> {
+        let pending_before = self.mempool.clone();
         let transactions = self.mempool.drain();
         if transactions.is_empty() {
             return Ok(None);
         }
-        let index = self.add_block(transactions, authority, signing_key)?;
-        Ok(Some(index))
+        match self.add_block(transactions, authority, signing_key) {
+            Ok(index) => Ok(Some(index)),
+            Err(error) => {
+                // A failed seal did not commit a block: the caller must be
+                // able to retry without losing accepted transactions.
+                self.mempool = pending_before;
+                Err(error)
+            }
+        }
     }
 
     /// Seals `transactions` into a new block. The signing key must belong to an
@@ -371,6 +386,7 @@ impl Blockchain {
         self.balances = state.balances;
         self.nonces = state.nonces;
         self.rebuild_transaction_index();
+        self.reconcile_mempool();
         Ok(true)
     }
 
@@ -455,6 +471,20 @@ impl Blockchain {
         }
         self.balances = state.balances;
         self.nonces = state.nonces;
+        self.reconcile_mempool();
+    }
+
+    /// A remote block can confirm pending transactions or consume their
+    /// nonce/funds with a different transaction. Revalidate the remaining
+    /// sequence against the committed state before the next seal.
+    fn reconcile_mempool(&mut self) {
+        // drain sorts by sender and nonce, so a confirmed predecessor can be
+        // removed while its still-valid successors remain queued. If one
+        // transaction no longer fits, later nonces with a gap are dropped too.
+        let pending = self.mempool.drain();
+        for transaction in pending {
+            let _ = self.queue_transaction(transaction);
+        }
     }
 
     fn replay(&self, blocks: &[Block]) -> Result<LedgerState, ChainError> {

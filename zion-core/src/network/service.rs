@@ -12,7 +12,8 @@ use tracing::{error, info, warn};
 
 use super::p2p::{MyBehaviour, SyncEvent};
 use super::sync::{
-    apply_announcement, apply_snapshot, snapshot_of, BlockOutcome, SyncRequest, SyncResponse,
+    announcement_of, apply_announcement, apply_snapshot, snapshot_of, BlockOutcome, SyncRequest,
+    SyncResponse,
 };
 use crate::storage::ChainStore;
 
@@ -42,6 +43,22 @@ pub async fn handle_sync_event(
                             Ok(BlockOutcome::Appended) => {
                                 info!("blocco {} accettato da {}", index, peer);
                                 persist(store, &chain);
+                                let announcement =
+                                    announcement_of(&chain, chain.blocks.last().unwrap().clone());
+                                drop(chain);
+                                // Only a newly accepted block is relayed. Known
+                                // packets terminate the echo on cyclic networks.
+                                let peers: Vec<_> = swarm
+                                    .connected_peers()
+                                    .copied()
+                                    .filter(|id| *id != peer)
+                                    .collect();
+                                for target in peers {
+                                    swarm.behaviour_mut().sync.send_request(
+                                        &target,
+                                        SyncRequest::NewBlock(announcement.clone()),
+                                    );
+                                }
                                 (SyncResponse::Ack, false)
                             }
                             Ok(BlockOutcome::Known) => (SyncResponse::Ack, false),
@@ -82,6 +99,20 @@ pub async fn handle_sync_event(
                                 chain.blocks.len()
                             );
                             persist(store, &chain);
+                            let announcement =
+                                announcement_of(&chain, chain.blocks.last().unwrap().clone());
+                            drop(chain);
+                            let peers: Vec<_> = swarm
+                                .connected_peers()
+                                .copied()
+                                .filter(|id| *id != peer)
+                                .collect();
+                            for target in peers {
+                                swarm.behaviour_mut().sync.send_request(
+                                    &target,
+                                    SyncRequest::NewBlock(announcement.clone()),
+                                );
+                            }
                         }
                         Ok(false) => {}
                         Err(failure) => warn!("catena di {} rifiutata: {}", peer, failure),

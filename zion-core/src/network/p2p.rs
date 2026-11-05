@@ -10,15 +10,18 @@ use std::error::Error;
 use std::time::Duration;
 
 use super::sync::{SyncRequest, SyncResponse};
+use super::transactions::{TransactionAnnouncement, TransactionResponse};
 
 /// Application protocol carried over libp2p request-response.
 pub const SYNC_PROTOCOL: &str = "/blockrock/sync/1.0.0";
+pub const TRANSACTION_PROTOCOL: &str = "/blockrock/transactions/1.0.0";
 
 /// Peers that go quiet are kept around long enough to answer a sync request.
 const IDLE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type SyncBehaviour = JsonBehaviour<SyncRequest, SyncResponse>;
 pub type SyncEvent = request_response::Event<SyncRequest, SyncResponse>;
+pub type TransactionEvent = request_response::Event<TransactionAnnouncement, TransactionResponse>;
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "CustomEvent")]
@@ -26,6 +29,7 @@ pub struct MyBehaviour {
     pub mdns: Mdns,
     /// Chain synchronisation: block announcements and chain requests.
     pub sync: SyncBehaviour,
+    pub transactions: JsonBehaviour<TransactionAnnouncement, TransactionResponse>,
 }
 
 // Un evento per messaggio di rete, consumato subito dal loop dello swarm: la
@@ -35,6 +39,7 @@ pub struct MyBehaviour {
 pub enum CustomEvent {
     Mdns(MdnsEvent),
     Sync(SyncEvent),
+    Transaction(TransactionEvent),
 }
 
 impl From<MdnsEvent> for CustomEvent {
@@ -49,6 +54,12 @@ impl From<SyncEvent> for CustomEvent {
     }
 }
 
+impl From<TransactionEvent> for CustomEvent {
+    fn from(event: TransactionEvent) -> Self {
+        CustomEvent::Transaction(event)
+    }
+}
+
 impl MyBehaviour {
     pub fn new(local_peer_id: PeerId) -> Result<Self, Box<dyn Error>> {
         let mdns = Mdns::new(MdnsConfig::default(), local_peer_id)?;
@@ -56,7 +67,18 @@ impl MyBehaviour {
             [(StreamProtocol::new(SYNC_PROTOCOL), ProtocolSupport::Full)],
             request_response::Config::default(),
         );
-        Ok(MyBehaviour { mdns, sync })
+        let transactions = JsonBehaviour::new(
+            [(
+                StreamProtocol::new(TRANSACTION_PROTOCOL),
+                ProtocolSupport::Full,
+            )],
+            request_response::Config::default().with_request_timeout(Duration::from_secs(5)),
+        );
+        Ok(MyBehaviour {
+            mdns,
+            sync,
+            transactions,
+        })
     }
 }
 

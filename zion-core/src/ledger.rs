@@ -93,7 +93,10 @@ pub async fn submit(
     // blocchi con piu' di una transazione dentro. Prima si sigillava a ogni
     // invio, quindi ogni transazione otteneva un blocco tutto suo e il tick
     // da 5 secondi trovava sempre il mempool vuoto.
-    let worth_sealing = chain.is_worth_sealing();
+    // Followers accept and gossip the batch, but cannot seal it themselves.
+    let worth_sealing = chain.is_worth_sealing()
+        && chain.authorities.contains(&identity.name)
+        && chain.public_key(&identity.name) == Some(&identity.signing_key.verifying_key());
     drop(chain);
 
     if worth_sealing {
