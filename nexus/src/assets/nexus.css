@@ -1050,3 +1050,41 @@ legend {
     scroll-behavior: auto !important;
   }
 }
+
+/* Prisma: riflessione senza valori dedotti. */
+.prism { margin: 18px 0 28px; padding: 40px; border: 1px solid #314051; border-radius: 18px; background: radial-gradient(ellipse at 18% 50%, #1b3040 0%, transparent 40%), #121e2a; }
+.prism-intro { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding-bottom: 30px; border-bottom: 1px solid #304050; }
+.prism-intro h1 { margin: 0 0 12px; font-size: clamp(2.7rem, 4vw, 4.3rem); font-weight: 500; }
+.prism-intro h1 em { color: #c9e3d6; font-family: Georgia, serif; font-weight: 400; }
+.prism-intro > div > p:last-child { color: #aabaca; max-width: 620px; margin: 0; }
+.prism-kicker, .prism-small, .prism-visual-label { color: #a8c9bd; font-size: .65rem; font-weight: 700; letter-spacing: .16em; }
+.prism-kicker span { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #91c7b2; }
+.prism-tag { flex: none; color: #b4c7c1; font-size: .63rem; letter-spacing: .12em; border: 1px solid #40564f; border-radius: 30px; padding: 8px 12px; }
+.prism-layout { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.1fr); gap: 54px; align-items: center; padding-top: 28px; }
+.prism-visual { text-align: center; }
+.prism-visual-label { color: #8296a4; margin: 0; }
+.prism-visual svg { display: block; width: min(100%, 380px); margin: 7px auto; overflow: visible; }
+.prism-visual svg text { fill: #d9e6e2; font-size: 8px; font-weight: 700; letter-spacing: .11em; }
+.prism-visual-foot { color: #aabbbf; font-family: Georgia, serif; font-style: italic; margin: 0; }
+.prism-content-heading { display: flex; justify-content: space-between; align-items: end; }
+.prism-content-heading h2 { margin: 2px 0 0; font-size: 1.5rem; }
+.prism-content-heading > span { color: #748b95; font-size: .7rem; letter-spacing: .1em; }
+.prism-small { margin: 0 0 6px; }
+.prism-description { color: #aabaca; font-size: .9rem; margin: 12px 0 20px; }
+.prism-areas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prism-area { display: flex; align-items: center; gap: 11px; text-align: left; padding: 15px 13px; background: #172633; border-color: #304252; }
+.prism-area.active { border-color: #9bc5b4; background: #20352f; }
+.area-dot { width: 11px; height: 11px; flex: none; border-radius: 50%; background: var(--area-color); box-shadow: 0 0 12px color-mix(in srgb, var(--area-color) 45%, transparent); }
+.area-label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.area-label strong { font-size: .85rem; }.area-label small { color: #a6b8bb; font-size: .7rem; }
+.area-number { color: #788e96; font-size: .65rem; }
+.prism-reflection { padding: 18px 0 0; margin-top: 19px; border-top: 1px solid #304050; }
+.prism-reflection > div > p:last-child { color: #c4d1d5; font-size: .86rem; margin: 0 0 14px; }
+.prism-reflection fieldset { padding: 0; border: 0; margin: 0; }.prism-reflection legend { font-size: .77rem; color: #b1c1c9; margin-bottom: 9px; }
+.prism-choices { display: flex; flex-wrap: wrap; gap: 7px; }.prism-choices button { font-size: .72rem; padding: 8px 10px; }.prism-choices button[aria-pressed="true"] { color: #e4f2e9; border-color: #8bbba5; background: #29443c; }
+.prism-note { color: #8d9faa; font-size: .75rem; margin: 17px 0 0; }
+@media (max-width: 850px) { .prism { padding: 24px; }.prism-layout { grid-template-columns: 1fr; gap: 26px; }.prism-visual svg { width: min(90%, 330px); }.prism-intro { flex-direction: column; }.prism-tag { order: -1; } }
+@media (max-width: 450px) { .prism { padding: 20px; }.prism-areas { grid-template-columns: 1fr; }.prism-intro h1 { font-size: 2.8rem; } }
+.area-icon { width: 35px; height: 35px; flex: none; display: grid; place-items: center; border: 1px solid #3d5055; border-radius: 11px; background: #182a32; }
+.area-icon svg { width: 19px; height: 19px; }
+.prism-key { color: #95aab1; font-size: .72rem; line-height: 1.5; margin: 8px auto 0; max-width: 300px; }

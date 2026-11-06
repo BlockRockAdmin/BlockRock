@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import IkigaiPrism from "./IkigaiPrism.vue";
 import { parseGateway } from "../domain/gateway";
 import type { GatewaySnapshot } from "../domain/gateway";
 
@@ -25,12 +26,13 @@ async function choose(event: Event) {
 </script>
 
 <template>
+  <IkigaiPrism />
   <section class="card" aria-labelledby="gateway-title">
     <p class="eyebrow">Il tuo quadro</p>
     <h1 id="gateway-title">Impegni, spese e necessità</h1>
     <p>Un quadro può aiutarti a vedere cosa occupa le tue risorse e cosa hai dovuto rimandare.</p>
     <p>Per ora puoi aprire un file nel formato BlockRock. Rimane solo in questa pagina: non viene salvato nell'account né inviato al server. Cambiando pagina o ricaricando dovrai riaprirlo.</p>
-    <p>Cecchina Hub e gli altri gateway non sono ancora collegati automaticamente.</p>
+    <p>Un gateway personale, come Checkin Hub (Cecchina Hub), conserva e organizza documenti su NAS o PC. Il collegamento automatico a BlockRock è ancora da realizzare.</p>
     <label>Scegli un file del quadro
       <input type="file" accept="application/json,.json" @change="choose" />
     </label>

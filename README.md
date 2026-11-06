@@ -39,8 +39,10 @@ flowchart LR
     D -. codice e aggiornamenti .-> B
 ```
 
-Ogni persona usa il proprio gateway; Cecchina Hub è una possibile fonte.
-Il collegamento automatico **non è ancora realizzato**. Nexus
+Il gateway personale organizza la documentazione e gli impegni della persona
+su un NAS o PC locale, come fa Cecchina Hub. BlockRock potrà leggere le fonti
+scelte e restituire un quadro e riscontri sul percorso. Il collegamento
+automatico **non è ancora realizzato**. Nexus
 offre una prima anteprima locale di un file scelto dalla persona: non sincronizza
 quel file e non legge automaticamente il gateway.
 

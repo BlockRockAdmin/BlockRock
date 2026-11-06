@@ -1,7 +1,9 @@
 # Gateway personale e quadro locale
 
-Il gateway è una fonte scelta dalla persona: può contenere accordi, spese e
-necessità, con provenienza e data. Cecchina Hub è un possibile gateway; il
+Il gateway personale permette di conservare e organizzare documenti, accordi,
+spese e necessità su NAS o PC locale. La persona sceglie quali dati condividere
+con BlockRock per ottenere riscontri sul proprio percorso. Cecchina Hub è un
+esempio di gateway; il
 collegamento automatico e il controllo degli accessi per categoria sono da
 realizzare. Nessun gateway è collegato automaticamente.
 

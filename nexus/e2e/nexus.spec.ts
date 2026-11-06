@@ -329,3 +329,24 @@ test("il quadro scelto resta nella pagina e non viene inviato al server", async 
   await page.getByRole("button", { name: "Il mio quadro", exact: true }).click();
   await expect(page.getByText("riservato-esempio-gateway")).toHaveCount(0);
 });
+
+test("il prisma consente di esplorare più aree senza inventare valutazioni", async ({ page }) => {
+  await register(page);
+  await page.getByRole("button", { name: "Il mio quadro", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Il tuo prisma" })).toBeVisible();
+  await page.getByRole("button", { name: /Le tue risorse/ }).click();
+  await page.getByRole("button", { name: "Sotto pressione", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Le tue risorse/ })).toContainText("Sotto pressione");
+  await expect(page.locator(".prism-visual circle[stroke-dasharray='5 4']")).toHaveCount(1);
+  await page.getByRole("button", { name: /Ciò che ami/ }).click();
+  await page.getByRole("button", { name: "Trova spazio", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Ciò che ami/ })).toContainText("Trova spazio");
+  await expect(page.getByRole("button", { name: /Le tue risorse/ })).toContainText("Sotto pressione");
+  await page.screenshot({path: "/tmp/blockrock-prisma-desktop.png", fullPage: true});
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({path: "/tmp/blockrock-prisma-mobile.png", fullPage: true});
+  await page.reload();
+  await page.getByRole("button", { name: "Il mio quadro", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Le tue risorse/ })).toContainText("Da esplorare");
+});

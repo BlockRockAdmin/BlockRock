@@ -19,6 +19,9 @@ telefono.
 - Importare, solo su scelta esplicita, i passi del vecchio prototipo locale.
 - Aprire temporaneamente un file del proprio quadro nel browser, con fonte e data;
   formato e limiti in [gateway personale](../docs/gateway-personale.md).
+- Esplorare nel prisma ispirato all'Ikigai quattro dimensioni e indicare dove
+  si percepisce spazio o pressione. Le scelte sono temporanee, non sono calcolate
+  dai dati e non vengono salvate nell'account.
 - Recuperare l'accesso con un codice personale, cambiare password, eliminare l'account.
 
 Un `+1` non è un voto e non modifica capitale o rischio. Nexus non invia ordini
