@@ -1088,3 +1088,20 @@ legend {
 .area-icon { width: 35px; height: 35px; flex: none; display: grid; place-items: center; border: 1px solid #3d5055; border-radius: 11px; background: #182a32; }
 .area-icon svg { width: 19px; height: 19px; }
 .prism-key { color: #95aab1; font-size: .72rem; line-height: 1.5; margin: 8px auto 0; max-width: 300px; }
+
+/* Identità BlockRock: nero, rosso e verde. */
+:root { color: #f1f1f3; background: #09090b; --surface: #121214; --line: #343438; --muted: #b2b2bb; --blue: #ff486a; --blue-soft: #ff91a7; }
+button { background: #202024; } button:hover:not(:disabled) { background: #303037; border-color: #767680; }
+input, textarea { background: #0d0d10; border-color: #4a4a51; color: #f2f2f4; }
+.brand-mark, .primary { background: #e11d48; color: #fff; border-color: #e11d48; }
+.primary:hover:not(:disabled) { background: #c3133a; }
+.prism { background: radial-gradient(ellipse at 15% 50%, #123127 0%, transparent 45%), radial-gradient(ellipse at 90% 10%, #37101c 0%, transparent 50%), #101012; border-color: #3c3c42; }
+.prism-intro, .prism-reflection { border-color: #38383e; }
+.prism-intro h1 em { color: #ff6280; }.prism-intro > div > p:last-child, .prism-description { color: #bdbdc6; }
+.prism-kicker, .prism-small { color: #75edac; }.prism-kicker span { background: #ff486a; }
+.prism-tag { border-color: #91334a; color: #ff99af; }.prism-visual svg text { fill: #f0f0f2; }
+.prism-area { background: #18181c; border-color: #3b3b43; }.prism-area.active { background: #16251e; border-color: #50efa0; }
+.area-icon { background: #131317; border-color: #414149; }.area-label small, .prism-reflection > div > p:last-child { color: #c1c1ca; }
+.prism-choices button[aria-pressed="true"] { background: #173926; border-color: #50efa0; color: #c7f9da; }
+.prism-visual-foot, .prism-key, .prism-note { color: #aeb5b2; }
+.sync-dot { background: #50efa0; }
