@@ -3,10 +3,11 @@ import { reactive, ref, watch } from "vue";
 import AccountGate from "./AccountGate.vue";
 import DataPanel from "./DataPanel.vue";
 import JourneyBoard from "./JourneyBoard.vue";
+import PersonalGateway from "./PersonalGateway.vue";
 import { useJourney } from "../composables/useJourney";
 import { download } from "../domain/journey";
 const app = reactive(useJourney());
-const page = ref<"today" | "personal" | "stability" | "data">("today");
+const page = ref<"today" | "personal" | "stability" | "gateway" | "data">("today");
 const confirmLocal = ref(false);
 watch(
   () => app.user?.id,
@@ -116,6 +117,8 @@ const formatTime = (value: string) =>
                 @click="page = 'stability'"
               >
                 Stabilità</button
+              ><button :aria-current="page === 'gateway' ? 'page' : undefined" @click="page = 'gateway'">
+                Il mio quadro</button
               ><button :aria-current="page === 'data' ? 'page' : undefined" @click="page = 'data'">
                 Dati e account
               </button>
@@ -175,8 +178,9 @@ const formatTime = (value: string) =>
               Riprendi il percorso
             </button>
           </div>
+          <PersonalGateway v-if="page === 'gateway'" />
           <DataPanel
-            v-if="page === 'data'"
+            v-else-if="page === 'data'"
             :journey="app.journey"
             :username="app.user.username"
             :can-edit="app.canEdit"

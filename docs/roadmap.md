@@ -8,6 +8,7 @@ Stato verificato il 5 novembre 2026. La visione di riferimento è in
 | Nodo e rete di prova | Prototipo funzionante | Consenso PoA, sincronizzazione dei blocchi e inoltro delle transazioni anche tramite relay. Restano separati persistenza della coda e preparazione all'esercizio stabile. |
 | Nexus: percorso personale | MVP completato | Passi modificabili e annullabili, interessi, obiettivi personali e di stabilità separati, pausa e ripresa. |
 | Nexus: account e dati | MVP completato | Accesso, recupero, cambio password, cancellazione, isolamento fra account, sincronizzazione con controllo delle revisioni, bozze locali ed esportazione/ripristino. |
+| Gateway personale | Prima anteprima locale | File scelto dalla persona e letto nel browser; collegamento automatico, permessi, analisi del prisma e lettura da Cecchina Hub ancora da realizzare. |
 | Nexus sul PC | Attivato | Servizio utente su loopback, avvio al login, pagina e API controllate nel browser. |
 | Accesso privato da altri dispositivi | Preparato; attivazione rimandata | Sincronizzazione verificata con due sessioni browser. L'utente ha scelto di usare per ora il solo PC. Per telefono/altri PC serve l'indirizzo HTTPS del servizio nella rete privata. |
 | Backup automatici fuori dal disco del PC | Da configurare | Destinazione separata, pianificazione, conservazione e prova periodica. Il comando di backup consistente e il test di ripristino con account sono già disponibili. |

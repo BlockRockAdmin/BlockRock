@@ -17,6 +17,8 @@ telefono.
   esplicitamente i conflitti. Le scritture non sovrascrivono revisioni più recenti.
 - Esportare il percorso in JSON; controllare un backup e aggiungerlo o sostituirlo.
 - Importare, solo su scelta esplicita, i passi del vecchio prototipo locale.
+- Aprire temporaneamente un file del proprio quadro nel browser, con fonte e data;
+  formato e limiti in [gateway personale](../docs/gateway-personale.md).
 - Recuperare l'accesso con un codice personale, cambiare password, eliminare l'account.
 
 Un `+1` non è un voto e non modifica capitale o rischio. Nexus non invia ordini

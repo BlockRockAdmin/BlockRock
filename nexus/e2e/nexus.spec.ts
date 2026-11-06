@@ -306,3 +306,26 @@ test("storage non disponibile: account e salvataggio sul server funzionano comun
   await login(page, account.username);
   await expect(page.locator(".entries")).toContainText("Passo senza storage del browser");
 });
+
+test("il quadro scelto resta nella pagina e non viene inviato al server", async ({ page }) => {
+  await register(page);
+  await page.getByRole("button", { name: "Il mio quadro", exact: true }).click();
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    const body = request.postData();
+    if (body?.includes("riservato-esempio-gateway")) sent.push(request.url());
+  });
+  const document = {
+    format: "blockrock-gateway-v1", source: "Esempio", updatedAt: "2026-11-06T10:00:00Z",
+    items: [{ title: "riservato-esempio-gateway", kind: "impegno", status: "previsto", note: "Rimborso atteso", amountCents: 20000 }],
+  };
+  await page.getByLabel("Scegli un file del quadro").setInputFiles({name: "quadro.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(document))});
+  await expect(page.getByText("riservato-esempio-gateway")).toBeVisible();
+  await expect(page.getByText(/Previsto.*200,00/)).toBeVisible();
+  await page.getByRole("button", { name: "Sincronizza ora" }).click();
+  await expect(page.getByText("riservato-esempio-gateway")).toBeVisible();
+  expect(sent).toEqual([]);
+  await page.getByRole("button", { name: "Oggi", exact: true }).click();
+  await page.getByRole("button", { name: "Il mio quadro", exact: true }).click();
+  await expect(page.getByText("riservato-esempio-gateway")).toHaveCount(0);
+});

@@ -56,6 +56,28 @@ transizioni consentite, i limiti operativi e il significato di ciascun livello.
 La scala non va dedotta automaticamente da informazioni personali o da un
 punteggio di attività.
 
+## Gateway personale, resistenze e cuscinetto
+
+Un gateway scelto dalla persona può raccogliere spese, impegni, accordi anche
+verbali, inventario e bisogni. BlockRock può aiutare a vedere come un vincolo
+economico incide su altri aspetti della vita: proteggere un bilancio potrebbe
+richiedere di rimandare qualcosa di importante per la casa. Il significato di
+queste rinunce resta nella valutazione della persona, non in un punteggio imposto.
+
+Il percorso da una situazione iniziale a una maggiore protezione può includere
+una riserva per imprevisti e un'eventuale componente multi-asset distinta. Il
+pavimento personale è un obiettivo di risorse disponibili, non una garanzia di
+rendimento o di perdita massima. Il capitale a rischio può perdere valore.
+La situazione personale non deve attivare automaticamente operazioni o
+aumentare l'esposizione. Ogni regola operativa richiede specifica separata.
+
+L'obiettivo è elaborare i dati localmente, senza telemetria personale verso
+sviluppatori o sponsor. Un servizio esterno riceve solo i dati che la persona
+sceglie di inviargli; i dati personali non devono essere inseriti nella catena
+pubblica. I collegamenti automatici ai gateway e la selezione degli accessi non
+sono ancora implementati; la prima anteprima locale è descritta in
+[gateway-personale.md](gateway-personale.md).
+
 ## Confini del prodotto
 
 BlockRock descrive difficoltà di vita dichiarate dalla persona, come problemi

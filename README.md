@@ -1,5 +1,36 @@
 ![BlockRock Logo](docs/Logo.jpeg)
 
+## Un percorso verso una maggiore stabilità
+
+BlockRock aiuta la persona a vedere come impegni, risorse e scelte incidono
+sulla vita quotidiana, e a costruire un percorso verso una riserva per gli
+imprevisti. Il prisma mette in evidenza anche i sacrifici: pagare una bolletta,
+per esempio, può significare rinunciare a un acquisto utile per la casa.
+
+```mermaid
+flowchart LR
+    G[Gateway personale: accordi, spese, casa] -->|dati scelti dalla persona| B[BlockRock locale: quadro e prisma]
+    B --> P[Percorso personale e cuscinetto]
+    S[Sostenitori] --> D[Sviluppo del progetto]
+    D -. codice e aggiornamenti .-> B
+```
+
+Ogni persona usa il proprio gateway; nel caso di Alessandro la possibile fonte
+è Cecchina Hub. Il collegamento automatico **non è ancora realizzato**. Nexus
+offre una prima anteprima locale di un file scelto dalla persona: non sincronizza
+quel file e non legge automaticamente il gateway.
+
+Il progetto punta a dati privati locali, senza telemetria personale verso gli
+sviluppatori o gli sponsor. L'uso di servizi esterni, inclusa un'IA remota,
+richiede una scelta consapevole: i dati inviati a tali servizi lasciano il
+dispositivo. I dati personali non vanno inseriti nella blockchain pubblica.
+Gli sponsor sostengono lo sviluppo, non accedono ai dati delle persone.
+
+Una riserva dipende da risorse effettivamente disponibili: blockchain e
+investimenti non garantiscono rendimenti o perdite massime. La scaletta e ogni
+eventuale operazione finanziaria automatica restano da definire. Approfondimenti:
+[visione del prodotto](docs/visione-prodotto.md) e [formato del quadro](docs/gateway-personale.md).
+
 ## 📁 Struttura del repository
 
 ```
