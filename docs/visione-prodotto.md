@@ -12,6 +12,22 @@ ritrovare stabilità e movimento, rispettando le caratteristiche individuali.
 Il percorso dovrebbe lasciare spazio alla persona per ritrovare e scegliere la
 propria direzione.
 
+## Il ruolo della blockchain
+
+La blockchain è pensata come registro verificabile degli eventi che la persona
+sceglie di autorizzare: una rappresentazione digitale di passaggi e movimenti
+che hanno significato nel percorso. Firme, blocchi collegati e consenso fra
+autorità permettono di controllare l'integrità dello storico e le regole del
+nodo. L'obiettivo futuro è definire accordi, condizioni e transizioni verificabili
+anche per la gestione della riserva, con regole comprensibili e controllo della
+persona.
+
+Oggi la catena è un prototipo: non implementa ancora contratti per il percorso
+personale o la riserva, né il collegamento al gateway. Un fatto registrato è una
+dichiarazione verificabile, non la prova automatica che il fatto sia avvenuto;
+il consenso dipende dalle autorità configurate. Una blockchain non garantisce
+rendimenti né rende corretti gli accordi o i dati inseriti.
+
 ## Ripartenza attraverso le azioni
 
 La persona non deve raccontare o spiegare verbalmente la propria situazione per

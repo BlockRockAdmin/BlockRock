@@ -1,16 +1,40 @@
 ![BlockRock Logo](docs/Logo.jpeg)
 
-## Un percorso verso una maggiore stabilità
+## Dare continuità alle scelte, costruire stabilità
 
-BlockRock aiuta la persona a vedere come impegni, risorse e scelte incidono
-sulla vita quotidiana, e a costruire un percorso verso una riserva per gli
-imprevisti. Il prisma mette in evidenza anche i sacrifici: pagare una bolletta,
-per esempio, può significare rinunciare a un acquisto utile per la casa.
+BlockRock nasce dall'idea che un percorso personale ed economico sia fatto di
+azioni, impegni e conseguenze. Un accordo preso, una spesa imprevista o una
+rinuncia per proteggere il bilancio possono cambiare le possibilità di una
+persona. BlockRock vuole rendere visibili queste relazioni e accompagnarla nella
+costruzione di una riserva per affrontare gli imprevisti.
+
+Il **prisma** aiuta a leggere la stessa scelta da più punti di vista: pagare una
+bolletta protegge un impegno economico, ma può richiedere di rimandare qualcosa
+di importante per la casa. La persona mantiene il controllo del significato di
+ogni evento e del proprio percorso.
+
+## Perché una blockchain
+
+BlockRock usa una blockchain perché vuole dare alle azioni che la persona sceglie
+di registrare una storia verificabile: chi ha autorizzato un movimento, quali
+regole sono state applicate e come si è arrivati allo stato successivo. I blocchi
+collegati e le firme rendono verificabile l'integrità delle registrazioni; i nodi
+autorizzati applicano le stesse regole di consenso. In questo modo un passaggio
+del percorso può avere una rappresentazione digitale verificabile, comprensibile
+come un'azione nella vita reale.
+
+La visione comprende anche accordi e regole di gestione del percorso espressi in
+modo esplicito e verificabile: condizioni, limiti e transizioni dovranno poter
+essere controllati prima di qualsiasi eventuale esecuzione. Questo è un obiettivo
+di sviluppo, non una funzione di smart contract già disponibile. La blockchain
+non può verificare da sola che un evento esterno sia avvenuto, né garantire che
+un accordo sia corretto o che un investimento produca un guadagno.
 
 ```mermaid
 flowchart LR
-    G[Gateway personale: accordi, spese, casa] -->|dati scelti dalla persona| B[BlockRock locale: quadro e prisma]
-    B --> P[Percorso personale e cuscinetto]
+    G[Gateway personale: accordi, spese, casa] -. dati scelti dalla persona .-> B[BlockRock locale: quadro e prisma]
+    B -. percorso e regole da definire .-> P[Obiettivo: riserva per gli imprevisti]
+    B -. eventi selezionati e autorizzati .-> C[Blockchain: storico verificabile]
     S[Sostenitori] --> D[Sviluppo del progetto]
     D -. codice e aggiornamenti .-> B
 ```
@@ -20,6 +44,7 @@ Il collegamento automatico **non è ancora realizzato**. Nexus
 offre una prima anteprima locale di un file scelto dalla persona: non sincronizza
 quel file e non legge automaticamente il gateway.
 
+I collegamenti tratteggiati rappresentano funzionalità da progettare o integrare.
 Il progetto punta a dati privati locali, senza telemetria personale verso gli
 sviluppatori o gli sponsor. L'uso di servizi esterni, inclusa un'IA remota,
 richiede una scelta consapevole: i dati inviati a tali servizi lasciano il
@@ -30,6 +55,11 @@ Una riserva dipende da risorse effettivamente disponibili: blockchain e
 investimenti non garantiscono rendimenti o perdite massime. La scaletta e ogni
 eventuale operazione finanziaria automatica restano da definire. Approfondimenti:
 [visione del prodotto](docs/visione-prodotto.md) e [formato del quadro](docs/gateway-personale.md).
+
+Oggi il nodo Rust è un **prototipo** con transazioni firmate, blocchi e consenso
+Proof of Authority; Nexus offre un percorso personale locale e un'anteprima di
+file. Il collegamento fra percorso, gateway e blockchain, i contratti per la
+riserva e la gestione automatica degli asset non sono ancora implementati.
 
 ## 📁 Struttura del repository
 
