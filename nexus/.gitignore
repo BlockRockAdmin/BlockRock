@@ -29,3 +29,27 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+# Account e dati privati del servizio Nexus
+server/.venv/
+server/data/
+__pycache__/
+*.pyc
+test-results/
+playwright-report/
+
+# Copie e configurazioni private anche fuori dalla cartella dati predefinita
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-*
+*.pem
+invitation.txt
+nexus-codice-recupero.json
+nexus-copia-locale-da-verificare.json
+nexus-passi-originali.json
+nexus-????-??-??.json

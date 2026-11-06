@@ -52,6 +52,11 @@ sezione «Transazioni ricevute da un nodo non validatore» della stessa guida.
 La visione del prodotto e il percorso di recupero personale e finanziario sono
 descritti in [docs/visione-prodotto.md](docs/visione-prodotto.md).
 
+L'interfaccia personale [Nexus](nexus/README.md) comprende account privati,
+sincronizzazione fra dispositivi, passi quotidiani, interessi e obiettivi,
+pausa, esportazione e ripristino. Il servizio può essere avviato sul PC;
+l'accesso degli altri dispositivi richiede un indirizzo HTTPS nella rete privata.
+
 Il ciclo di monitoraggio omeostatico di Zion Core e l'endpoint di telemetria
 `/metabolism` sono descritti in [docs/hypothalamus.md](docs/hypothalamus.md).
 

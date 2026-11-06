@@ -4,14 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
-    "preview": "vite preview",
+    "preview": "npm run start:server",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
-    "lint": "run-s lint:*"
+    "lint": "run-s lint:*",
+    "test": "node --test tests/*.test.mjs",
+    "test:api": "server/.venv/bin/python -m unittest server.test_app -v",
+    "test:e2e": "npm run build && playwright test",
+    "start:server": "server/.venv/bin/python -m server.run"
   },
   "dependencies": {
     "axios": "^1.9.0",
@@ -26,13 +30,13 @@
     "vuetify": "^3.8.9"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@tsconfig/node22": "^22.0.1",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/eslint-config-typescript": "^14.5.0",
     "@vue/tsconfig": "^0.7.0",
     "buffer": "^6.0.3",
-    "crypto-browserify": "^3.12.1",
     "eslint": "^9.22.0",
     "eslint-plugin-oxlint": "^0.16.0",
     "eslint-plugin-vue": "~10.0.0",
@@ -41,13 +45,20 @@
     "oxlint": "^0.16.0",
     "path": "^0.12.7",
     "readable-stream": "^4.7.0",
-    "serve": "^14.2.4",
     "stream-browserify": "^3.0.0",
     "typescript": "~5.8.0",
     "util": "^0.12.5",
     "vite": "^6.2.4",
-    "vite-plugin-node-polyfills": "^0.23.0",
     "vite-plugin-vue-devtools": "^7.7.6",
     "vue-tsc": "^2.2.8"
+  },
+  "overrides": {
+    "tronweb": {
+      "axios": "^1.20.0"
+    },
+    "minimatch": "^11.0.4"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import RecoverySteps from '../components/RecoverySteps.vue'
+import NexusWorkspace from "../components/NexusWorkspace.vue";
 </script>
 
 <template>
-  <RecoverySteps />
+  <NexusWorkspace />
 </template>
