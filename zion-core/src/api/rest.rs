@@ -1,6 +1,7 @@
 use blockrock_core::{
     block::Block,
     blockchain::{Blockchain, MINT_ACCOUNT},
+    mempool::MAX_MEMPOOL_BYTES,
     transaction::{Amount, Transaction},
 };
 use ed25519_dalek::{Signature, VerifyingKey};
@@ -302,8 +303,34 @@ pub async fn health() -> &'static str {
 /// Latest policy decision from the autonomous monitoring loop.
 /// This endpoint is informational: it never performs infrastructure changes.
 #[get("/metabolism", format = "json")]
-pub async fn metabolism_status(state: &State<SharedMetabolicStatus>) -> Json<MetabolicStatus> {
-    Json(state.read().await.clone())
+pub async fn metabolism_status(
+    state: &State<SharedMetabolicStatus>,
+    blockchain: &State<Arc<Mutex<Blockchain>>>,
+) -> Json<MetabolismResponse> {
+    let status = state.read().await.clone();
+    let chain = blockchain.lock().await;
+    Json(MetabolismResponse {
+        status,
+        mempool: MempoolStatus {
+            pending: chain.pending_count(),
+            bytes: chain.mempool.weight(),
+            capacity_bytes: MAX_MEMPOOL_BYTES,
+        },
+    })
+}
+
+#[derive(Serialize)]
+pub struct MetabolismResponse {
+    #[serde(flatten)]
+    status: MetabolicStatus,
+    mempool: MempoolStatus,
+}
+
+#[derive(Serialize)]
+struct MempoolStatus {
+    pending: usize,
+    bytes: usize,
+    capacity_bytes: usize,
 }
 
 /// Il manifesto descrive i moduli compilati dentro questo binario, quindi

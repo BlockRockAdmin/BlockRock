@@ -24,3 +24,10 @@ Con il binario `node` attivo, `GET /metabolism` restituisce l'ultimo stato:
 ```
 
 `hypertrophy` e `atrophy` sono richieste di capacità, scritte nel log e visibili nell'API. Un attuatore separato dovrà applicare limiti di budget, una lista esplicita di risorse consentite e un'approvazione prima di qualunque scale-up o scale-down.
+
+La risposta di `/metabolism` include inoltre `mempool`: numero di transazioni
+in attesa (`pending`), byte occupati (`bytes`) e limite (`capacity_bytes`).
+Sono valori letti al momento della richiesta, mentre la decisione e i parametri
+di sistema provengono dall'ultimo ciclo di monitoraggio: non sono quindi un
+campione simultaneo. La coda non modifica ancora il punteggio o le decisioni e
+non viene inclusa nei webhook. Il mempool resta volatile.

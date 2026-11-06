@@ -133,6 +133,13 @@ finché ci sono modifiche da sincronizzare o conflitti da risolvere.
 
 Il ripristino sostitutivo può rimuovere dati: esporta prima la versione attuale.
 I backup JSON non includono account o password; il backup del server li include.
+
+Il backup automatico locale usa `deploy/blockrock-nexus-backup.service` e
+`deploy/blockrock-nexus-backup.timer`: crea una copia SQLite verificata al giorno
+in `~/Documenti/Backup-Nexus`, con permessi privati. Le copie precedenti non
+vengono cancellate automaticamente. Essendo sullo stesso PC, non proteggono da
+un guasto del disco: conservarne anche una copia su un dispositivo separato.
+Il timer recupera un'esecuzione mancata al successivo avvio della sessione.
 L'eliminazione dell'account revoca gli accessi e rimuove i record attivi, ma
 non cancella automaticamente backup, file esportati o bozze negli altri browser.
 

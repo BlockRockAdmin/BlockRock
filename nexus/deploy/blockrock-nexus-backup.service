@@ -1,0 +1,10 @@
+[Unit]
+Description=Backup locale del database Nexus
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documenti/VSCode/BlockRock/nexus
+ExecStart=%h/Documenti/VSCode/BlockRock/nexus/server/.venv/bin/python -m server.backup_scheduled %h/Documenti/VSCode/BlockRock/nexus/server/data/nexus.sqlite3 %h/Documenti/Backup-Nexus
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

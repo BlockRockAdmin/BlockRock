@@ -118,6 +118,35 @@ async fn submit(client: &Client, body: Value) -> (Status, Value) {
 }
 
 #[rocket::async_test]
+async fn metabolism_reports_live_mempool_without_changing_policy() {
+    let node = start_node().await;
+    let key = SigningKey::generate(&mut OsRng);
+    let tx = Transaction::new("Alice".into(), "Bob".into(), 1, 0, &key);
+    let expected_bytes = tx.weight();
+    {
+        let mut chain = node.blockchain.lock().await;
+        chain.add_public_key("Alice", key.verifying_key());
+        chain.queue_transaction(tx).unwrap();
+    }
+    let response = node.client.get("/metabolism").dispatch().await;
+    assert_eq!(response.status(), Status::Ok);
+    let body: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["action"], "maintain");
+    assert_eq!(body["mempool"]["pending"], 1);
+    assert_eq!(body["mempool"]["bytes"], expected_bytes);
+    assert_eq!(
+        body["mempool"]["capacity_bytes"],
+        blockrock_core::mempool::MAX_MEMPOOL_BYTES
+    );
+
+    node.seal().await;
+    let response = node.client.get("/metabolism").dispatch().await;
+    let body: Value = serde_json::from_str(&response.into_string().await.unwrap()).unwrap();
+    assert_eq!(body["mempool"]["pending"], 0);
+    assert_eq!(body["mempool"]["bytes"], 0);
+}
+
+#[rocket::async_test]
 async fn a_signed_transfer_is_sealed_and_survives_a_restart() {
     let mut node = start_node().await;
     let alice = SigningKey::generate(&mut OsRng);
