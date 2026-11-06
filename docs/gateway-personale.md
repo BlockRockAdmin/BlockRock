@@ -20,7 +20,7 @@ Formato iniziale (i dati sotto sono inventati):
   "source": "Esempio personale",
   "updatedAt": "2026-11-06T10:00:00Z",
   "items": [
-    {"title": "Anticipo per un acquisto", "kind": "impegno", "status": "previsto", "note": "In attesa di rimborso", "amountCents": 20000},
+    {"title": "Anticipo per un acquisto", "kind": "impegno", "status": "previsto", "note": "In attesa di rimborso", "amountCents": 4250},
     {"title": "Acquisto per la casa", "kind": "necessita", "status": "in_corso", "note": "Rimandato", "amountCents": null}
   ]
 }

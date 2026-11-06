@@ -15,8 +15,8 @@ flowchart LR
     D -. codice e aggiornamenti .-> B
 ```
 
-Ogni persona usa il proprio gateway; nel caso di Alessandro la possibile fonte
-è Cecchina Hub. Il collegamento automatico **non è ancora realizzato**. Nexus
+Ogni persona usa il proprio gateway; Cecchina Hub è una possibile fonte.
+Il collegamento automatico **non è ancora realizzato**. Nexus
 offre una prima anteprima locale di un file scelto dalla persona: non sincronizza
 quel file e non legge automaticamente il gateway.
 
