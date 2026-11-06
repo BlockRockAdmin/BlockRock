@@ -32,6 +32,19 @@ le proprie capacità, il mondo intorno e le risorse disponibili. Non assegna un
 voto alla vita: la persona mantiene il controllo del significato delle proprie
 scelte e dei propri obiettivi.
 
+![Anteprima del prisma interattivo Nexus con dati di esempio](docs/assets/nexus-prisma.png)
+
+*Anteprima di Nexus con dati di prova. Le valutazioni nel prisma sono temporanee.*
+
+### Un esempio concreto
+
+Una persona registra un impegno per un acquisto e, nel frattempo, riceve una
+bolletta imprevista. Il gateway personale conserva questi elementi; BlockRock
+potrà mettere in evidenza il denaro impegnato e la necessità rimandata, per
+aiutare la persona a valutare il proprio margine. Una futura riserva potrebbe
+aiutarla ad assorbire l'imprevisto se contiene risorse disponibili. Oggi il
+collegamento automatico e l'analisi sono ancora da realizzare.
+
 ## Perché la blockchain
 
 BlockRock è progettato intorno a una blockchain per dare ai movimenti
